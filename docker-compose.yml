@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    container_name: doctor-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env 
+    depends_on:
+      - elastic
+    restart: unless-stopped
+
+  # For development
+  elastic:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: elastic-local
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
