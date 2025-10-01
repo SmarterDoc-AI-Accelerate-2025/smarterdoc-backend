@@ -1,5 +1,9 @@
 # smarterdoc-backend
 
+## GCP Link
+Backend Link: https://smarterdoc-backend-1094971678787.us-central1.run.app
+Test End Point: https://smarterdoc-backend-1094971678787.us-central1.run.app/hello
+
 ## Getting Started
 
 You can run this application either locally using a Python virtual environment or, preferably, using Docker Compose for a quick, isolated setup that includes the necessary ElasticSearch dependency.
