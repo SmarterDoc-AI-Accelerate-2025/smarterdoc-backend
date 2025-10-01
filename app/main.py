@@ -6,7 +6,7 @@ from .util.logging import setup_logging
 
 log = setup_logging()
 
-app = FastAPI(title="Doctor Assistant Backend", version="0.1.0")
+app = FastAPI(title="SmarterDoc Backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
