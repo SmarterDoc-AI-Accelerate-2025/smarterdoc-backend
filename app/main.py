@@ -21,5 +21,8 @@ app.add_middleware(
 def health():
     return {"ok": True, "env": settings.ENVIRONMENT}
 
+@app.get("/hello")
+def hello_world():
+    return {"message": "Hello Hogan"}
 
 app.include_router(api_router)
