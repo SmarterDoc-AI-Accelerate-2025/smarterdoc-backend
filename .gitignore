@@ -1,5 +1,8 @@
-# Generated CSV files
+# Generated data files
 *.csv
+npi_doctors_*.json
+*_multilevel.json
+*_unlimited.json
 
 # Python
 __pycache__/

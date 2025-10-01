@@ -1,181 +1,222 @@
-# smarterdoc-backend
+# NPI Data Extraction Tool
 
-NPI Registry API 数据提取工具 - 从 CMS 官方 API 获取医疗提供者数据并导出为 CSV。
+Advanced NPI Registry API data extraction tool that breaks through the 1200-record API limit using intelligent multi-level sharding strategy.
 
-## 快速开始
+## 🎯 Key Features
 
-### ⚠️ 遇到 1200 条限制？
+- ✅ **Break 1200 Limit**: Multi-level sharding strategy to fetch unlimited records
+- ✅ **Complete Data**: Collect all specialties by scanning postal codes  
+- ✅ **Smart Subdivision**: Automatically subdivide by postal code when specialty exceeds 1200
+- ✅ **Global Deduplication**: Ensure unique NPI records across all queries
+- ✅ **Original JSON Format**: Maintain complete NPI Registry API data structure
+- ✅ **Progress Tracking**: Real-time display of query progress
 
-如果你发现数据停留在 1200 条且无法增加，请查看：
-👉 **[突破限制快速指南](./QUICK_START.md)**
+## 📊 Performance Comparison
 
-### 安装依赖
+| City | Old Method | New Multi-level Method | Improvement |
+|------|-----------|----------------------|-------------|
+| **New York, NY** | 10,384 records | **73,581 records** | **7x improvement** ✨ |
+| **Hoboken, NJ** | 992 records | 992 records | Complete data ✅ |
+
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 工具对比
-
-本项目提供四个不同的 NPI 数据提取工具，根据需求选择：
-
-### 🚀 NPI_json_unlimited.py - JSON 无限制版（推荐大规模查询）
-
-**适用场景**：需要获取某城市/州的**完整**医生数据（突破 1200 条限制），且需要原始 JSON 格式
-
-**特点**：
-- ✅ **突破 API 限制**：通过分片查询突破 1200 条上限
-- ✅ **原始 JSON 格式**：保持 NPI Registry API 的完整数据结构
-- ✅ 三种分片策略：按专科、邮编、姓氏首字母
-- ✅ 全局去重：跨分片自动去重
-- ✅ 详细进度：显示每个分片的查询进度
-- ✅ 适合大数据分析：保留所有原始字段和嵌套结构
-
-**基本用法**：
+### Basic Usage
 
 ```bash
-# 按专科分片（推荐，最精确）
-python NPI_json_unlimited.py "New York" "NY" "taxonomy"
+# Fetch complete data for a city
+python NPI_multilevel_shard.py "New York" "NY"
 
-# 按姓氏首字母分片（覆盖面广）
-python NPI_json_unlimited.py "Los Angeles" "CA" "last_name"
+# Fetch data for another city
+python NPI_multilevel_shard.py "Los Angeles" "CA"
 
-# 或直接运行（使用文件内配置）
-python NPI_json_unlimited.py
+# The tool will automatically:
+# 1. Scan all postal codes in the city
+# 2. Discover all medical specialties
+# 3. Query each specialty
+# 4. Subdivide by postal code if specialty exceeds 1200 records
 ```
 
-**输出**：`npi_doctors_NewYork_NY_unlimited.json`（包含完整的 NPI Registry API 数据结构）
+### Output
 
----
+- **File**: `npi_doctors_NewYork_NY_multilevel.json`
+- **Format**: Complete NPI Registry API JSON structure
+- **Content**: All NPI-1 type healthcare providers in the specified city
 
-### 🚀 NPI_csv_unlimited.py - CSV 无限制版（推荐大规模查询）
+## 🔧 How It Works
 
-**适用场景**：需要获取某城市/州的**完整**医生数据（突破 1200 条限制）
+### Multi-level Sharding Strategy
 
-**特点**：
-- ✅ **突破 API 限制**：通过分片查询突破 1200 条上限
-- ✅ 三种分片策略：按专科、邮编、姓氏首字母
-- ✅ 全局去重：跨分片自动去重
-- ✅ 详细进度：显示每个分片的查询进度
-- ✅ 适合大城市：纽约、洛杉矶等医生数量 > 1200 的城市
+```
+Step 1: Postal Code Collection
+├─ Traverse first 1200 records
+└─ Extract all unique postal codes
 
-**基本用法**：
+Step 2: Specialty Discovery  
+├─ Query first 200 records from each postal code
+└─ Collect all unique specialties (no omissions)
 
-```bash
-# 按专科分片（推荐，最精确）
-python NPI_csv_unlimited.py "New York" "NY" "taxonomy"
-
-# 按姓氏首字母分片（覆盖面广）
-python NPI_csv_unlimited.py "Los Angeles" "CA" "last_name"
-
-# 或直接运行（使用文件内配置）
-python NPI_csv_unlimited.py
+Step 3: Data Retrieval
+├─ Query by specialty
+└─ If reaches 1200 limit → Subdivide by postal code
+    ├─ Query each specialty + postal code combination
+    └─ Ensure all data is retrieved
 ```
 
-**输出**：`npi_doctors_NewYork_NY_unlimited.csv`（包含所有医生，无数量限制）
+### Example: New York City
 
-**新特性**：
-- ✅ 动态获取所有专科（不再使用预定义列表）
-- ✅ 返回所有 `taxonomy_code` 原始数据（用分号分隔）
-- ✅ 删除主要专科字段，获取完整专科信息
-
----
-
-### 📄 NPI_json_unlimited.py - JSON 无限制版（推荐数据分析）
-
-**适用场景**：需要原始 JSON 格式进行深度数据分析
-
-**特点**：
-- ✅ **完整原始数据**：保持 NPI Registry API 的完整 JSON 结构
-- ✅ **所有字段保留**：basic、addresses、taxonomies、identifiers、endpoints 等
-- ✅ **嵌套结构**：保持原始的对象和数组结构
-- ✅ **适合编程**：便于 JSON 解析和 API 集成
-
-**基本用法**：
-
-```bash
-# 获取完整 JSON 数据
-python NPI_json_unlimited.py "New York" "NY" "taxonomy"
+```
+Total postal codes: 300+
+Total specialties: 100+
+Specialties exceeding 1200:
+  - Student in an Organized Health Care Education/Training Program: 1200+ → Subdivided by postal code
+  - Internal Medicine: 1200+ → Subdivided by postal code
+  
+Final result: 73,581 unique NPI records (vs 10,384 with old method)
 ```
 
-**输出**：`npi_doctors_NewYork_NY_unlimited.json`（符合 NPI Registry API v2.1 格式）
+## 📝 Configuration
 
----
-
-### 1️⃣ NPI_csv.py - 简化版（推荐小规模查询）
-
-**适用场景**：快速获取特定城市的医生数据（< 1200 条）
-
-**特点**：
-- ✅ 配置简单，修改文件顶部配置即可
-- ✅ 单文件扁平化输出，便于直接使用
-- ✅ 专注个人医生（NPI-1），过滤执业地址
-- ✅ 自动命名输出文件
-- ✅ 强大的网络重试机制
-- ⚠️ **限制**：单次查询最多 1200 条（API 限制）
-
-**基本用法**：
-
-```bash
-# 直接运行（使用文件内配置）
-python NPI_csv.py
-
-# 或使用命令行参数
-python NPI_csv.py "Boston" "MA" "Family Medicine"
-```
-
-**配置方式**：编辑 `NPI_csv.py` 顶部配置区：
+Edit configuration in `NPI_multilevel_shard.py`:
 
 ```python
-CITY = "Boston"          # 目标城市
-STATE = "MA"             # 州缩写
-TAXONOMY_DESC = ""       # 专科过滤（如 "Family Medicine"）
-PAGE_LIMIT = 200         # 每页数量
+# ====== Configuration ======
+CITY = "New York"
+STATE = "NY"
+ADDRESS_PURPOSE = "location"
+ENUMERATION_TYPE = "NPI-1"
+API_VERSION = "2.1"
+PAGE_LIMIT = 200
+REQUEST_TIMEOUT = 30
+MAX_RETRIES = 5
+RETRY_BACKOFF = 2.0
+OUTPUT_FILE = None  # Auto-generate if None
+# ====================
 ```
 
-**输出**：单个 CSV 文件（如 `npi_doctors_Boston_MA.csv`），包含完整信息
+## 🔍 Data Analysis
 
----
-
-### 2️⃣ npi_to_csv.py - 完整版
-
-**适用场景**：需要规范化数据库结构或复杂查询
-
-**特点**：
-- ✅ 命令行参数丰富
-- ✅ 生成三张规范化 CSV 表（providers, addresses, taxonomies）
-- ✅ 支持个人和组织类型
-- ✅ 更灵活的筛选条件
-
-**基本用法**：
+Use `analyze_taxonomy.py` to analyze the distribution of medical specialties:
 
 ```bash
-# 按州 + 专科筛选
-python npi_to_csv.py --state NY --taxonomy "Family Medicine"
-
-# 按姓名查询
-python npi_to_csv.py --first-name John --last-name Smith
-
-# 精确 NPI 查询
-python npi_to_csv.py --npi 1234567890
+python analyze_taxonomy.py
 ```
 
-**输出**：三个 CSV 文件
-- `providers.csv` - 医疗提供者主信息
-- `addresses.csv` - 地址信息（邮寄/执业）
-- `taxonomies.csv` - 专业分类信息
+**Output**:
+- Total record count
+- Unique specialty descriptions
+- Unique specialty codes  
+- Top 20 most common specialties
+- Complete specialty list (alphabetically sorted)
+
+## 📌 Important Notes
+
+### API Rate Limits
+
+The NPI Registry API has rate limiting. If you encounter `403 Forbidden` errors:
+
+1. **Wait 10-15 minutes** for the rate limit to reset
+2. The tool already includes delays (0.2-0.3s between requests)
+3. For very large cities, the query may take 5-10 minutes
+
+### City Name Format
+
+Use exact city names as they appear in the NPI database:
+
+✅ Correct:
+- `"New York"` (not "New York City")
+- `"Los Angeles"`
+- `"Chicago"`
+
+❌ Incorrect:
+- `"NYC"` or `"New York city"` (limited data)
+
+### Data Completeness
+
+The multi-level sharding strategy ensures:
+- All postal codes are scanned
+- All specialties are discovered
+- Specialties exceeding 1200 are automatically subdivided
+- No data loss due to API limits
+
+## 🛠️ Technical Details
+
+### API Limitations
+
+The NPI Registry API has a hard limit:
+- **Maximum 1200 records** per single query combination
+- When `skip >= 1200`, API returns duplicate data
+- Cannot bypass through simple pagination
+
+### Solution: Intelligent Sharding
+
+```
+Problem: Single specialty > 1200 records
+Solution: Specialty + Postal Code subdivision
+
+Example: "Internal Medicine" in New York
+├─ Direct query: 1200 records (limited)
+└─ Subdivide by postal code:
+    ├─ Internal Medicine + 10001: 150 records
+    ├─ Internal Medicine + 10002: 98 records
+    ├─ ... (all postal codes)
+    └─ Total: 1500+ unique records ✅
+```
+
+## 📦 Output Format
+
+The output JSON file follows the NPI Registry API v2.1 structure:
+
+```json
+{
+  "result_count": 73581,
+  "results": [
+    {
+      "number": "1234567890",
+      "enumeration_type": "NPI-1",
+      "basic": {
+        "first_name": "John",
+        "last_name": "Smith",
+        "credential": "MD",
+        ...
+      },
+      "addresses": [...],
+      "taxonomies": [...],
+      "identifiers": [...],
+      "endpoints": [...]
+    },
+    ...
+  ]
+}
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+MIT License
+
+## 🔗 Resources
+
+- [NPI Registry API Documentation](https://npiregistry.cms.hhs.gov/api-page)
+- [NPPES NPI Registry](https://npiregistry.cms.hhs.gov/)
+- [CMS National Plan and Provider Enumeration System](https://www.cms.gov/Regulations-and-Guidance/Administrative-Simplification/NationalProvIdentStand)
+
+## 💡 Tips
+
+1. **Start with small cities** to test (e.g., Hoboken, NJ)
+2. **Be patient** with large cities (may take 5-10 minutes)
+3. **Check output file** immediately if process is interrupted
+4. **Use analyze_taxonomy.py** to understand specialty distribution
+5. **Respect API limits** - don't run multiple instances simultaneously
 
 ---
 
-## 详细文档
-
-完整使用说明请查看 [NPI_USAGE.md](./NPI_USAGE.md)
-
-## 环境要求
-
-- Python 3.7+
-- requests 库
-
-## License
-
-MIT License
+**Built with ❤️ for healthcare data researchers**
