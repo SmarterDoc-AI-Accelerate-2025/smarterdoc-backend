@@ -50,3 +50,7 @@ The API should be available shortly after starting.
 FastAPI Backend: Access the health check endpoint at `http://localhost:8080/healthz` (should return {"ok": true, ...}).
 
 ElasticSearch: Accessible at `http://localhost:9200` (for debugging).
+
+### Google Cloud
+Backend Link: `https://smarterdoc-backend-1094971678787.us-central1.run.app/`
+Test Endpoint: `https://smarterdoc-backend-1094971678787.us-central1.run.app/hello`
