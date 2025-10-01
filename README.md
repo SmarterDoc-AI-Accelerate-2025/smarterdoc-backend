@@ -51,6 +51,25 @@ FastAPI Backend: Access the health check endpoint at `http://localhost:8080/heal
 
 ElasticSearch: Accessible at `http://localhost:9200` (for debugging).
 
-### Google Cloud
-Backend Link: `https://smarterdoc-backend-1094971678787.us-central1.run.app/`
-Test Endpoint: `https://smarterdoc-backend-1094971678787.us-central1.run.app/hello`
+---
+
+## 🏥 NPI Data Extraction Tools
+
+This repository also includes advanced tools for extracting healthcare provider data from the NPI Registry.
+
+**Location**: [`npi_tools/`](./npi_tools/)
+
+**Features**:
+- 🚀 **Multi-level Sharding**: Break through the 1200-record API limit
+- 📊 **Complete Data**: Extract all healthcare providers for any city
+- 🔍 **Smart Analysis**: Analyze specialty distribution
+
+**Quick Start**:
+```bash
+cd npi_tools
+python NPI_multilevel_shard.py "New York" "NY"
+```
+
+**Results**: Successfully extracted 73,581+ NPI records for New York City (7x improvement over traditional methods)
+
+📖 **[Full Documentation](./npi_tools/README.md)**
