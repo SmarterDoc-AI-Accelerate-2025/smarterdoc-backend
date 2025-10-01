@@ -12,7 +12,7 @@ You can run this application either locally using a Python virtual environment o
 
 - Docker and Docker Compose (recommended setup)
 
-### 1. Setup with Docker Compose (Recommended)
+### Setup with Docker Compose (Recommended)
 
 This method builds the FastAPI application within a container and automatically spins up a local ElasticSearch instance, linking them together.
 
@@ -50,32 +50,3 @@ The API should be available shortly after starting.
 FastAPI Backend: Access the health check endpoint at `http://localhost:8080/healthz` (should return {"ok": true, ...}).
 
 ElasticSearch: Accessible at `http://localhost:9200` (for debugging).
-
-### 2. Local Setup (Without Docker for Backend)
-
-Use this method if you prefer to run the Python application directly on your machine. Note that you still need the ElasticSearch service running (from the Docker Compose file) for the application to function.
-
-#### A. Start ElasticSearch
-
-If you haven't already, start the ElasticSearch container using Docker Compose (but omit the backend service).
-
-docker compose up elastic -d
-
-#### B. Install Requirements
-
-Navigate to the project root (backend/) and set up the Python environment:
-
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-#### C. Run the Application
-
-Copy the environment file and start the FastAPI server with auto-reloading enabled (for development):
-
-```
-cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
-```
-
-The application will be accessible at `http://localhost:8080`.
