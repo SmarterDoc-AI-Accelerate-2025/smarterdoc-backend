@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # TODO: add search api key if using web-search for data enrichment
     GOOGLE_SEARCH_API_KEY: str | None = None
     GOOGLE_SEARCH_CSE_ID: str | None = None
+    GCP_MEDIA_BUCKET: str | None=None
 
     ELASTIC_URL: str = "http://localhost:9200"
     ELASTIC_API_KEY: str | None = None

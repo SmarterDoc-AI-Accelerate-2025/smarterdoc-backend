@@ -19,8 +19,8 @@ class GCSMediaClient:
         """Initializes the GCS client and search configurations."""
         self.bucket_name = settings.GCP_MEDIA_BUCKET
         self.storage_client = storage.Client(project=settings.GCP_PROJECT_ID)
-        self.search_api_key = settings.WEB_SEARCH_API_KEY
-        self.cse_id = settings.WEB_SEARCH_CSE_ID
+        self.search_api_key = settings.GOOGLE_SEARCH_API_KEY
+        self.cse_id = settings.GOOGLE_SEARCH_CSE_ID
 
         if not self.bucket_name:
             logger.error(
