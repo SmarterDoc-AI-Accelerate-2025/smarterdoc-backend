@@ -89,3 +89,13 @@ class ElasticClient:
         """Placeholder for fetching evidence documents related to a doctor."""
         logger.warning("Fetch evidence is a placeholder.")
         return []
+
+# --- Backward compatibility patch for API import ---
+def hybrid_search(es=None, req=None):
+    """
+    Temporary wrapper to maintain backward compatibility with existing routes.
+    Internally calls ElasticClient.hybrid_search().
+    """
+    from app.services.elastic_client import ElasticClient
+    client = ElasticClient()
+    return client.hybrid_search(req)
