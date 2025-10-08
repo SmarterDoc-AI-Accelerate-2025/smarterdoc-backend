@@ -147,6 +147,8 @@ async def enrich_single_doctor(
         extracted_dict.get('testimonial_summary_text'),
         "ratings": extracted_dict.get('ratings_summary', []),
         "publications": extracted_dict.get('publications', []),
+        "education": extracted_dict.get('education', []),
+        "hospitals": extracted_dict.get('hospitals', []),
 
         # Vector and Timestamp
         "bio_vector": vector_result,
