@@ -9,3 +9,6 @@ elasticsearch==8.15.1
 
 # NPI data extraction tools
 requests>=2.28.0
+
+# Google Gen AI SDK
+google-genai>=0.2.0
