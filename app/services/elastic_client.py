@@ -67,6 +67,20 @@ class ElasticClient:
         return len(records)
 
 
-# Instantiate the client instance for the Indexer to use its bulk_upsert method
-# (We don't need this instance for the API's search functions, but keep it for completeness)
-ELASTIC_CLIENT_INSTANCE = ElasticClient()
+    def fetch_evidence_ids(self,
+                           npi: str,
+                           condition_slug: str,
+                           limit: int = 3) -> list[str]:
+        """Placeholder for fetching evidence documents related to a doctor."""
+        logger.warning("Fetch evidence is a placeholder.")
+        return []
+
+# --- Backward compatibility patch for API import ---
+def hybrid_search(es=None, req=None):
+    """
+    Temporary wrapper to maintain backward compatibility with existing routes.
+    Internally calls ElasticClient.hybrid_search().
+    """
+    from app.services.elastic_client import ElasticClient
+    client = ElasticClient()
+    return client.hybrid_search(req)
