@@ -1,20 +1,32 @@
+# -----------------------
+# Base image
+# -----------------------
 FROM python:3.11-slim
 
-# System deps (nice to have: curl for health/debug)
+# Install system deps (useful for networking/debug)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy and install Python deps first (cache-friendly)
-COPY requirements.txt ./
+# -----------------------
+# Install Python dependencies
+# -----------------------
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app
+# -----------------------
+# Copy application
+# -----------------------
 COPY app ./app
-COPY .env.example ./.env
+COPY .env.example .env
 
-# Runtime
+# -----------------------
+# Runtime configuration
+# -----------------------
 ENV PYTHONUNBUFFERED=1
+# Cloud Run injects $PORT automatically
 EXPOSE 8080
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# ✅ Use Cloud Run's provided $PORT (defaults to 8080 locally)
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}

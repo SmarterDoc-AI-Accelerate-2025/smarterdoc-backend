@@ -8,5 +8,7 @@ router = APIRouter()
 
 @router.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest, es=Depends(get_elastic)):
-    hits = hybrid_search(es, req)
+    # The 'es' parameter from Depends(get_elastic) is currently ignored
+    # because hybrid_search is a mock function that doesn't need it.
+    hits = hybrid_search(req, es)
     return SearchResponse(candidates=hits)
