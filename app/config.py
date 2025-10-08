@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     GCP_REGION: str = "us-central1"
 
     BQ_PROJECT: str | None = None
-    BQ_CURATED_DATASET: str = "curated"  # target dataset for enriched data
+    BQ_CURATED_DATASET: str = "curated"
     COST_TABLE: str | None = None
 
     BQ_RAW_DATASET: str = "gcs_npi_staging"
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash-lite"
     EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
     EMBEDDING_API_ENDPOINT: str = "us-central1-aiplatform.googleapis.com"
+    # TODO: add search api key if using web-search for data enrichment
+    GOOGLE_SEARCH_API_KEY: str | None = None
+    GOOGLE_SEARCH_CSE_ID: str | None = None
 
     ELASTIC_URL: str = "http://localhost:9200"
     ELASTIC_API_KEY: str | None = None
@@ -48,6 +51,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = 'ignore'
 
 
 settings = Settings()

@@ -9,10 +9,10 @@ elasticsearch==8.15.1
 
 # GCP
 google-cloud-bigquery
-google-cloud-bigquery
 google-cloud-storage
 google-cloud-core 
 google-cloud-aiplatform
+google-genai
 
 # NPI data extraction tools
 requests>=2.28.0

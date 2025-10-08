@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from google.cloud import bigquery
 from app.config import settings
@@ -24,29 +24,28 @@ def get_doctors_for_enrichment(limit: int = 1000) -> List[Dict[str, Any]]:
     """
     raw_table = f"{settings.BQ_RAW_DATASET}.{settings.BQ_RAW_TABLE}"
 
-    # JSON_EXTRACT_SCALAR flattens Fivetran JSON structure
-    # this query uses JSON functions to access nested fields in the _data JSON blob.
     query = f"""
     SELECT
         JSON_EXTRACT_SCALAR(_data, '$.number') AS npi,
         JSON_EXTRACT_SCALAR(_data, '$.basic.first_name') AS first_name,
         JSON_EXTRACT_SCALAR(_data, '$.basic.last_name') AS last_name,
         
-        -- Extract the primary specialty description where 'primary' is true
+        -- Primary Specialty Extraction (Robust Logic)
         COALESCE(
-            (SELECT tax.desc FROM UNNEST(JSON_EXTRACT_ARRAY(_data, '$.taxonomies')) tax_json, 
-            UNNEST(JSON_QUERY_ARRAY(tax_json)) AS tax
-            WHERE JSON_EXTRACT_SCALAR(tax, '$.primary') = 'true'
-            LIMIT 1),
-            -- Fallback to the first specialty if no primary is explicitly set
+            (
+                SELECT 
+                    JSON_EXTRACT_SCALAR(t, '$.desc')
+                FROM 
+                    UNNEST(JSON_EXTRACT_ARRAY(_data, '$.taxonomies')) AS t 
+                WHERE 
+                    JSON_EXTRACT_SCALAR(t, '$.primary') = 'true'
+                LIMIT 1
+            ),
             JSON_EXTRACT_SCALAR(JSON_EXTRACT_ARRAY(_data, '$.taxonomies')[OFFSET(0)], '$.desc')
-        ) AS primary_specialty,
+        ) AS primary_specialty
         
-        -- Pass the entire JSON blob for easier processing if needed later
-        _data AS full_npi_json 
     FROM
         `{settings.GCP_PROJECT_ID}.{raw_table}`
-    -- Ensure you only query recent data to limit cost/processing in a production setting
     WHERE _fivetran_synced > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY) 
     LIMIT {limit}
     """
@@ -62,35 +61,43 @@ def get_doctors_for_enrichment(limit: int = 1000) -> List[Dict[str, Any]]:
         return []
 
 
-# Transformation
+# Transform
 
 
 async def enrich_single_doctor(
         doctor: Dict[str, Any],
         use_custom_search: bool = False) -> Dict[str, Any]:
     """
-    Handles the sequential, high-latency enrichment steps for one doctor, 
-    switching between LLM Grounding and Custom Search based on flags.
+    Handles the sequential, high-latency enrichment steps for one doctor.
+    Returns a final_record dictionary ready for BigQuery insertion.
     """
 
     name = f"{doctor['first_name']} {doctor['last_name']}"
     specialty = doctor.get('primary_specialty', 'Physician')
 
-    # default: use gemini LLM with built-in grounding
+    raw_bio_text = ""
+    vector_result = [0.0] * 768  #fallback vector
 
+    # default: using built-in grounding from LLM
     if not use_custom_search:
         prompt = (
             f"""As a medical data expert, find the official profile and review information for 
     Dr. {name}, a specialist in {specialty}. Extract their years of experience, 
     average patient ratings, key publications, and a profile picture URL.
-    **Summarize key patient testimonials** to help new patients make informed decisions.
+    Summarize key patient testimonials to help new patients make informed decisions.
     Use Google Search as your tool. Calculate years of experience from their graduation or residency end date."""
         )
-        enriched_data = GEMINI_CLIENT.extract_structured_data_with_grounding(
+
+        # The grounding client returns a Tuple: (extracted_dict, sources_list)
+        result_tuple = GEMINI_CLIENT.extract_structured_data_with_grounding(
             prompt_instruction=prompt)
 
-    # fall-back: custom web search with LLM
+        extracted_dict, sources = result_tuple
+
+        text_to_embed = extracted_dict.get('bio_text_consolidated', "")
+
     else:
+        # fallback: custom web search
         if not isinstance(web_search_client, WebSearchClient):
             print(
                 f"Warning: custom search client not initialized correctly. Skipping NPI {doctor['npi']}."
@@ -99,47 +106,49 @@ async def enrich_single_doctor(
                 **doctor, "updated_at": datetime.datetime.now().isoformat()
             }
 
-        # calls custom client
+        # Note: This is an awaitable call to the custom search client
         raw_bio_text, profile_url, review_snippets = await web_search_client.search_and_extract_bio(
             doctor)
 
         prompt = (
             f"Analyze the following consolidated web text and extract the structured data. "
             f"Consolidated Text: ---START--- {raw_bio_text} ---END---")
-        enriched_data = GEMINI_CLIENT.extract_structured_data(
+        extracted_dict = GEMINI_CLIENT.extract_structured_data(
             unstructured_text=prompt)
 
-        if enriched_data:
-            enriched_data['profile_picture_url'] = profile_url
+        if extracted_dict:
+            extracted_dict['profile_picture_url'] = profile_url
 
-    # error handling/ vectorization
+        # The bio text for embedding comes from the custom web search
+        text_to_embed = extracted_dict.get('bio_text_consolidated',
+                                           raw_bio_text)
+        sources = []  # No grounding metadata when using custom search
 
-    if not enriched_data:
+    # Error Handling & Vectorization
+    if not extracted_dict:
         print(
             f"Warning: Failed to enrich NPI {doctor['npi']} using {'Grounding' if not use_custom_search else 'Custom Search'}. Returning raw data."
         )
         return {**doctor, "updated_at": datetime.datetime.now().isoformat()}
 
-    # The text used for the vector should be the combined professional bio
-    text_to_embed = enriched_data.get(
-        'bio_text_consolidated', raw_bio_text if use_custom_search else "")
-
-    # Placeholder: Call Vertex AI Embeddings API (Need to implement this in GeminiClient)
-    # vector_result = GEMINI_CLIENT.generate_embedding([text_to_embed])[0]
-    vector_result = [0.0] * 768  # Placeholder for 768-dim embedding
+    if text_to_embed:
+        # Call the actual implementation (returns a list of vectors, we need the first one [0])
+        vector_result = GEMINI_CLIENT.generate_embedding([text_to_embed])[0]
 
     final_record = {
         "npi": int(doctor['npi']),
         "first_name": doctor['first_name'],
         "last_name": doctor['last_name'],
         "primary_specialty": specialty,
+        "bio": extracted_dict.get('bio_text_consolidated', text_to_embed),
+        "profile_picture_url": extracted_dict.get('profile_picture_url'),
+        "years_experience": extracted_dict.get('years_experience'),
+        "testimonial_summary_text":
+        extracted_dict.get('testimonial_summary_text'),
+        "ratings": extracted_dict.get('ratings_summary', []),
+        "publications": extracted_dict.get('publications', []),
 
-        # mapping from EnrichedProfileData schema
-        "bio": enriched_data.get('bio_text_consolidated', text_to_embed),
-        "profile_picture_url": enriched_data.get('profile_picture_url'),
-        "years_experience": enriched_data.get('years_experience'),
-        "ratings": enriched_data.get('ratings_summary', []),
-        "publications": enriched_data.get('publications', []),
+        # Vector and Timestamp
         "bio_vector": vector_result,
         "updated_at": datetime.datetime.now().isoformat()
     }
@@ -150,17 +159,14 @@ async def enrich_single_doctor(
 async def transform_all_doctors(
         doctors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Runs the enrichment process concurrently for all doctors."""
-    # Use the Indexer Batch Size from config to manage concurrency
-    # since we only have 870, this will run in one or two large batches.
 
-    # NOTE: The default setting (use_custom_search=False) enables LLM Grounding.
     tasks = [enrich_single_doctor(d, use_custom_search=False) for d in doctors]
 
     # asyncio.gather runs all enrichment tasks concurrently
     return await asyncio.gather(*tasks)
 
 
-# Load
+# load
 
 
 def load_data(enriched_data: List[Dict[str, Any]]):
@@ -194,26 +200,45 @@ def load_data(enriched_data: List[Dict[str, Any]]):
 def run_indexer_job():
     """Main function to run the entire ETL indexer process."""
     print("######### Starting Cloud Run Indexer ETL Job ##########")
-
+    TEST_LIMIT = 8
     # Extract data from BQ
-    raw_doctors = get_doctors_for_enrichment(limit=870)
+    raw_doctors = get_doctors_for_enrichment(limit=TEST_LIMIT)
+    total_extracted = len(raw_doctors)
+
     if not raw_doctors:
         print("No raw data found or query failed. Exiting.")
         return
 
-    # Async Transform (Enrichment)
     enriched_doctors = asyncio.run(transform_all_doctors(raw_doctors))
 
-    # Filter out any failed enrichments before loading
-    enriched_doctors = [d for d in enriched_doctors if 'npi' in d]
+    successful_doctors = []
+    unprocessed_docs = []
+    successful_npis = []
+    unprocessed_npis = []
+    for d in enriched_doctors:
+        if 'failed' not in d:
+            successful_doctors.append(d)
+            successful_npis.append(d['npi'])
+        else:
+            unprocessed_docs.append(d)
+            unprocessed_npis.append(d['npi'])
 
-    if not enriched_doctors:
+    successful_count = len(successful_doctors)
+    failed_count = total_extracted - successful_count
+
+    if not successful_doctors:
         print("Enrichment failed for all doctors. Exiting.")
         return
 
-    # Load (BQ & Elastic)
     load_data(enriched_doctors)
 
+    print("\n--- FINAL JOB SUMMARY ---")
+    print(f"Total Records Extracted: {total_extracted}")
+    print(f"Records Successfully Enriched: {successful_count}")
+    print(f"Records Failed/Skipped: {failed_count}======")
+    print(f"Processed NPIs: {successful_npis}=======")
+    print(f"Unprocessed doctors: {unprocessed_docs}=======")
+    print(f"Unprocessed NPIs: {unprocessed_npis}======")
     print("@@@@@@@@@@@@ Indexer Job Completed Successfully @@@@@@@@@@")
 
 
