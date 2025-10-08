@@ -85,6 +85,8 @@ async def enrich_single_doctor(
             f"""As a medical data expert, find the official profile and review information for 
     Dr. {name}, a specialist in {specialty}. Extract their years of experience, 
     average patient ratings, key publications, and a profile picture URL.
+    Find our their education (which school they got their MD), and list out the hospitals they have worked and currently work at, as well
+    as where they did their residency.
     Summarize key patient testimonials to help new patients make informed decisions.
     Use Google Search as your tool. Calculate years of experience from their graduation or residency end date."""
         )
