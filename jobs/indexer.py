@@ -9,6 +9,7 @@ from google.cloud import bigquery
 from app.config import settings
 from app.services.gemini_client import GeminiClient, EnrichedProfileData
 from app.services.web_search import web_search_client, WebSearchClient
+from app.services.gcs_media_client import gcs_media_client
 
 BQ_CLIENT = bigquery.Client(project=settings.GCP_PROJECT_ID)
 GEMINI_CLIENT = GeminiClient()
@@ -131,6 +132,13 @@ async def enrich_single_doctor(
         )
         return {**doctor, "updated_at": datetime.datetime.now().isoformat()}
 
+    permanent_pic_url = gcs_media_client.acquire_and_upload_profile_pic(
+        doctor, str(doctor['npi']))
+
+    # Use the extracted URL from the LLM as a fallback if the image search fails
+    final_pic_url = permanent_pic_url if permanent_pic_url else extracted_dict.get(
+        'profile_picture_url', None)
+
     if text_to_embed:
         # Call the actual implementation (returns a list of vectors, we need the first one [0])
         vector_result = GEMINI_CLIENT.generate_embedding([text_to_embed])[0]
@@ -141,12 +149,14 @@ async def enrich_single_doctor(
         "last_name": doctor['last_name'],
         "primary_specialty": specialty,
         "bio": extracted_dict.get('bio_text_consolidated', text_to_embed),
-        "profile_picture_url": extracted_dict.get('profile_picture_url'),
+        "profile_picture_url": final_pic_url,
         "years_experience": extracted_dict.get('years_experience'),
         "testimonial_summary_text":
         extracted_dict.get('testimonial_summary_text'),
         "ratings": extracted_dict.get('ratings_summary', []),
         "publications": extracted_dict.get('publications', []),
+        "education": extracted_dict.get('education', []),
+        "hospitals": extracted_dict.get('hospitals', []),
 
         # Vector and Timestamp
         "bio_vector": vector_result,
