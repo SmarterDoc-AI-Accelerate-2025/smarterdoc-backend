@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from .api.v1 import api_router
 from .config import settings
 from .util.logging import setup_logging
+import os
 
 log = setup_logging()
 
@@ -14,6 +15,14 @@ app = FastAPI(
     version="0.1.0",
     description="SmarterDoc Backend API with AI Chat and Speech-to-Text capabilities"
 )
+
+# Add startup logging
+@app.on_event("startup")
+async def startup_event():
+    port = int(os.environ.get("PORT", 8080))
+    log.info(f"Starting SmarterDoc Backend on port {port}")
+    log.info(f"Environment: {settings.ENVIRONMENT}")
+    log.info("Application startup complete")
 
 # Configure CORS - Following ai_chat working pattern
 log.info(f"🌐 CORS: Allowing all origins ({'development' if settings.ENVIRONMENT == 'dev' else 'production'} mode)")

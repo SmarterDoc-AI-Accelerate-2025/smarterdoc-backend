@@ -38,7 +38,7 @@ jobs:
       run: |
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend
 
-    # Deploy to Cloud Run
+    # Deploy to Cloud Run with better configuration
     - name: Deploy to Cloud Run
       run: |
         gcloud run deploy smarterdoc-backend \
@@ -46,4 +46,10 @@ jobs:
           --platform managed \
           --region ${{ secrets.REGION }} \
           --allow-unauthenticated \
-          --port 8080
+          --port 8080 \
+          --memory 1Gi \
+          --cpu 1 \
+          --timeout 300s \
+          --concurrency 80 \
+          --min-instances 0 \
+          --max-instances 3
