@@ -109,3 +109,34 @@ class BookRequest(BaseModel):
 class BookResponse(BaseModel):
     status: str
     message: str
+
+
+# New schemas for frontend integration
+class FrontendSearchRequest(BaseModel):
+    query: Optional[str] = None
+    location: Optional[str] = None
+    insurance: Optional[str] = None
+
+
+class FrontendDoctor(BaseModel):
+    id: int
+    name: str
+    specialty: str
+    rating: float
+    reviews: int
+    address: str
+    lat: float
+    lng: float
+    time: str
+    img: str = "/doctor.png"
+    insurance_accepted: Optional[List[str]] = None
+
+
+class FrontendSearchResponse(BaseModel):
+    doctors: List[FrontendDoctor]
+    search_query: Optional[str] = None
+    total_results: int
+
+
+class VoiceSearchRequest(BaseModel):
+    voice_query: Optional[str] = None
