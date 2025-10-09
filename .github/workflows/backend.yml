@@ -52,4 +52,5 @@ jobs:
           --timeout 300s \
           --concurrency 80 \
           --min-instances 0 \
-          --max-instances 3
+          --max-instances 3 \
+          --quiet
