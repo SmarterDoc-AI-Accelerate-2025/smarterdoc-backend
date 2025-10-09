@@ -55,6 +55,15 @@ FastAPI Backend: Access the health check endpoint at `http://localhost:8080/heal
 
 ElasticSearch: Accessible at `http://localhost:9200` (for debugging).
 
+## Development Setup
+
+```bash
+# Install production dependencies
+pip install -r requirements.txt
+
+# Install development dependencies (for local audio recording)
+pip install -r requirements-dev.txt
+
 ---
 
 ## 🏥 NPI Data Extraction Tools

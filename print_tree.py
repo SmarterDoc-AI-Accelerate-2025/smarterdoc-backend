@@ -48,6 +48,7 @@ extra_ignores = [
     # editor/IDE
     ".idea/",
     ".vscode/",
+    ".myenv/*"
 ]
 
 spec = pathspec.PathSpec.from_lines("gitwildmatch",
