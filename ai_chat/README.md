@@ -203,6 +203,20 @@ uvicorn ai_chat.main:app --reload --host 0.0.0.0 --port 8000
 
 Access the API documentation at [http://localhost:8000/docs](http://localhost:8000/docs)
 
+### 6. Try the Interactive Demo 🎤
+
+**Browser-based Speech-to-Text Demo:**
+
+Visit [http://localhost:8000/demo](http://localhost:8000/demo) in your browser to try the real-time speech transcription with your microphone!
+
+Features:
+- 🎙️ Real-time transcription from your browser microphone
+- 🌍 Multiple language support (English, Chinese, Japanese, Korean, Spanish, French)
+- 📊 Live confidence scores
+- ✨ Beautiful, responsive UI
+
+No additional setup required - just allow microphone access when prompted!
+
 ## ⚙️ Configuration
 
 ### Environment Variables
@@ -413,9 +427,25 @@ Response:
 
 Transcribe an audio file to text.
 
-**Request:**
+**Important:** Make sure the `sample_rate` parameter matches your audio file's actual sample rate. Mismatched sample rates will result in empty transcriptions.
+
+**Parameters:**
+- `file` (required): Audio file to transcribe (WAV, LINEAR16 format)
+- `language_code` (optional): Language code (default: en-US)
+- `sample_rate` (optional): Audio sample rate in Hz (default: 16000)
+- `enable_automatic_punctuation` (optional): Enable automatic punctuation (default: true)
+
+**Request (with 16kHz audio):**
 ```bash
 curl -X POST "http://localhost:8000/api/v1/speech/transcribe?language_code=en-US" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@audio_16k.wav"
+```
+
+**Request (with 48kHz audio - specify sample_rate):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/speech/transcribe?language_code=en-US&sample_rate=48000" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@audio.wav"
@@ -500,6 +530,143 @@ stream_microphone()
 {"transcript": "hello", "is_final": false, "stability": 0.85}
 {"transcript": "hello world", "is_final": false, "stability": 0.92}
 {"transcript": "hello world", "is_final": true, "confidence": 0.96}
+```
+
+### Browser Microphone Real-time Transcription (WebSocket)
+
+**🎤 Interactive Demo Page Available!**
+
+Visit [http://localhost:8000/demo](http://localhost:8000/demo) or [http://localhost:8000/static/speech_demo.html](http://localhost:8000/static/speech_demo.html) to access the interactive web demo.
+
+**WebSocket** `/api/v1/speech/stream/websocket`
+
+Real-time audio streaming from browser microphone using WebSocket connection. This is the recommended method for web applications.
+
+**Features:**
+- ✅ Real-time transcription with interim results
+- ✅ Low latency streaming
+- ✅ Browser microphone support
+- ✅ Multiple language support
+- ✅ Automatic audio format conversion
+
+**Parameters:**
+- `language_code` (query, optional): Language code (default: en-US)
+- `sample_rate` (query, optional): Audio sample rate in Hz (default: 16000)
+
+**WebSocket Protocol:**
+
+Client sends:
+- Binary audio data (LINEAR16 PCM format, 16-bit, mono)
+- Text message "close" to end the stream
+
+Server sends:
+- JSON messages with transcription results
+
+**JavaScript Example:**
+```javascript
+// Connect to WebSocket
+const ws = new WebSocket('ws://localhost:8000/api/v1/speech/stream/websocket?language_code=en-US&sample_rate=16000');
+
+ws.onopen = () => {
+    console.log('WebSocket connected');
+    
+    // Get microphone stream
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            const audioContext = new AudioContext({ sampleRate: 16000 });
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
+            
+            processor.onaudioprocess = (e) => {
+                // Convert Float32Array to Int16Array
+                const float32 = e.inputBuffer.getChannelData(0);
+                const int16 = new Int16Array(float32.length);
+                for (let i = 0; i < float32.length; i++) {
+                    const s = Math.max(-1, Math.min(1, float32[i]));
+                    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                
+                // Send audio data
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(int16.buffer);
+                }
+            };
+            
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+        });
+};
+
+ws.onmessage = (event) => {
+    const result = JSON.parse(event.data);
+    console.log('Transcript:', result.transcript);
+    console.log('Is final:', result.is_final);
+    if (result.is_final) {
+        console.log('Confidence:', result.confidence);
+    }
+};
+
+// Close connection
+ws.send('close');
+ws.close();
+```
+
+**Response Format** (JSON messages):
+```json
+{"transcript": "hello", "is_final": false, "stability": 0.85}
+{"transcript": "hello world", "is_final": false, "stability": 0.92}
+{"transcript": "hello world", "is_final": true, "confidence": 0.96}
+```
+
+**Python WebSocket Client Example:**
+```python
+import asyncio
+import websockets
+import json
+import pyaudio
+
+async def stream_microphone():
+    uri = "ws://localhost:8000/api/v1/speech/stream/websocket?language_code=en-US&sample_rate=16000"
+    
+    async with websockets.connect(uri) as websocket:
+        print("Connected to WebSocket")
+        
+        # Setup audio
+        audio = pyaudio.PyAudio()
+        stream = audio.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=16000,
+            input=True,
+            frames_per_buffer=1024
+        )
+        
+        async def send_audio():
+            try:
+                while True:
+                    data = stream.read(1024, exception_on_overflow=False)
+                    await websocket.send(data)
+                    await asyncio.sleep(0.01)
+            except KeyboardInterrupt:
+                await websocket.send("close")
+        
+        async def receive_transcripts():
+            try:
+                while True:
+                    response = await websocket.recv()
+                    result = json.loads(response)
+                    if result['is_final']:
+                        print(f"\nFinal: {result['transcript']}")
+                        print(f"Confidence: {result.get('confidence', 'N/A')}")
+                    else:
+                        print(f"\rInterim: {result['transcript']}", end='')
+            except websockets.exceptions.ConnectionClosed:
+                print("\nConnection closed")
+        
+        # Run both tasks
+        await asyncio.gather(send_audio(), receive_transcripts())
+
+asyncio.run(stream_microphone())
 ```
 
 ### Stream Audio File Transcription

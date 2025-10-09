@@ -19,6 +19,8 @@
 
 from elasticsearch import Elasticsearch
 from app.config import settings
+from app.services.chat_service import GenAIChatService, get_chat_service as _get_chat_service
+from app.services.speech_service import SpeechToTextService, get_speech_service as _get_speech_service
 from typing import Any, Generator
 import logging
 
@@ -71,3 +73,23 @@ def get_elastic() -> Generator[Any, None, None]:
     finally:
         # FastAPI cleanup logic is typically handled implicitly or by using yield.
         pass
+
+
+def get_chat_service() -> GenAIChatService:
+    """
+    Dependency injection for chat service.
+    
+    Returns:
+        GenAIChatService instance
+    """
+    return _get_chat_service()
+
+
+def get_speech_service() -> SpeechToTextService:
+    """
+    Dependency injection for speech-to-text service.
+    
+    Returns:
+        SpeechToTextService instance
+    """
+    return _get_speech_service()

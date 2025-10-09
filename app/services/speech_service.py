@@ -8,7 +8,7 @@ from typing import AsyncIterator, Optional, Generator
 from google.cloud import speech
 import pyaudio
 
-from ..config import ChatConfig
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,10 @@ class SpeechToTextService:
     
     def __init__(self):
         """Initialize the Speech-to-Text client."""
-        self.config = ChatConfig
         self.client = self._create_client()
         logger.info(
-            f"Initialized Speech-to-Text client - project: {self.config.PROJECT_ID}, "
-            f"language: {self.config.SPEECH_LANGUAGE_CODE}"
+            f"Initialized Speech-to-Text client - project: {settings.GCP_PROJECT_ID}, "
+            f"language: {getattr(settings, 'SPEECH_LANGUAGE_CODE', 'en-US')}"
         )
     
     def _create_client(self) -> speech.SpeechClient:
@@ -30,7 +29,7 @@ class SpeechToTextService:
         Create and return a Google Cloud Speech-to-Text client.
         
         Requires:
-        - GOOGLE_CLOUD_PROJECT: Your Google Cloud project ID
+        - GCP_PROJECT_ID: Your Google Cloud project ID
         - Authentication via Application Default Credentials (ADC)
         
         Reference: https://cloud.google.com/speech-to-text/docs/transcribe-streaming-audio
@@ -65,14 +64,14 @@ class SpeechToTextService:
         # Build recognition config
         recognition_config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=sample_rate or self.config.SPEECH_SAMPLE_RATE,
-            language_code=language_code or self.config.SPEECH_LANGUAGE_CODE,
+            sample_rate_hertz=sample_rate or getattr(settings, 'SPEECH_SAMPLE_RATE', 16000),
+            language_code=language_code or getattr(settings, 'SPEECH_LANGUAGE_CODE', 'en-US'),
             enable_automatic_punctuation=(
                 enable_automatic_punctuation 
                 if enable_automatic_punctuation is not None 
-                else self.config.SPEECH_ENABLE_AUTOMATIC_PUNCTUATION
+                else getattr(settings, 'SPEECH_ENABLE_AUTOMATIC_PUNCTUATION', True)
             ),
-            model=self.config.SPEECH_MODEL,
+            model=getattr(settings, 'SPEECH_MODEL', 'default'),
         )
         
         # Build streaming config
@@ -82,7 +81,7 @@ class SpeechToTextService:
             single_utterance=(
                 single_utterance 
                 if single_utterance is not None 
-                else self.config.SPEECH_SINGLE_UTTERANCE
+                else getattr(settings, 'SPEECH_SINGLE_UTTERANCE', False)
             ),
         )
         
@@ -206,7 +205,7 @@ class SpeechToTextService:
             Dictionary containing transcription results
         """
         # Audio recording parameters
-        sample_rate = self.config.SPEECH_SAMPLE_RATE
+        sample_rate = getattr(settings, 'SPEECH_SAMPLE_RATE', 16000)
         audio_format = pyaudio.paInt16
         channels = 1
         
@@ -290,14 +289,14 @@ class SpeechToTextService:
             # Build recognition config
             config = speech.RecognitionConfig(
                 encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=sample_rate or self.config.SPEECH_SAMPLE_RATE,
-                language_code=language_code or self.config.SPEECH_LANGUAGE_CODE,
+                sample_rate_hertz=sample_rate or getattr(settings, 'SPEECH_SAMPLE_RATE', 16000),
+                language_code=language_code or getattr(settings, 'SPEECH_LANGUAGE_CODE', 'en-US'),
                 enable_automatic_punctuation=(
                     enable_automatic_punctuation 
                     if enable_automatic_punctuation is not None 
-                    else self.config.SPEECH_ENABLE_AUTOMATIC_PUNCTUATION
+                    else getattr(settings, 'SPEECH_ENABLE_AUTOMATIC_PUNCTUATION', True)
                 ),
-                model=self.config.SPEECH_MODEL,
+                model=getattr(settings, 'SPEECH_MODEL', 'default'),
             )
             
             audio = speech.RecognitionAudio(content=audio_content)
@@ -329,8 +328,8 @@ class SpeechToTextService:
         return {
             'status': 'healthy',
             'service': 'Google Cloud Speech-to-Text',
-            'language': self.config.SPEECH_LANGUAGE_CODE,
-            'sample_rate': self.config.SPEECH_SAMPLE_RATE,
+            'language': getattr(settings, 'SPEECH_LANGUAGE_CODE', 'en-US'),
+            'sample_rate': getattr(settings, 'SPEECH_SAMPLE_RATE', 16000),
         }
 
 

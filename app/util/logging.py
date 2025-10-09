@@ -16,6 +16,9 @@ def setup_logging():
     """
     Sets up the application logger and makes the configured logger available 
     for the entire application.
+    
+    Returns:
+        logging.Logger: Configured logger instance
     """
     global logger
 
@@ -26,7 +29,7 @@ def setup_logging():
     # 2. Prevent setting up multiple times
     if app_logger.handlers:
         logger = app_logger
-        return
+        return logger
 
     # 3. Create Handler (to direct logs to the console/stdout)
     handler = logging.StreamHandler(sys.stdout)
@@ -39,6 +42,8 @@ def setup_logging():
     # 5. Add Handler and Export
     app_logger.addHandler(handler)
     logger = app_logger  # Export the configured logger object
+    
+    return logger
 
 
 # Call setup immediately when the module is imported

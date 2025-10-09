@@ -7,14 +7,14 @@ import base64
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
-from ...models.schemas import (
+from app.models.schemas import (
     SpeechTranscribeRequest,
     SpeechStreamRequest,
     SpeechTranscriptionResponse,
     HealthCheckResponse
 )
-from ...services.speech_service import SpeechToTextService, get_speech_service
-from ...config import ChatConfig
+from app.services.speech_service import SpeechToTextService, get_speech_service
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +67,8 @@ async def transcribe_audio_file(
         return SpeechTranscriptionResponse(
             transcript=result['transcript'],
             confidence=result.get('confidence'),
-            language_code=language_code or ChatConfig.SPEECH_LANGUAGE_CODE,
-            sample_rate=sample_rate or ChatConfig.SPEECH_SAMPLE_RATE,
+            language_code=language_code or settings.SPEECH_LANGUAGE_CODE,
+            sample_rate=sample_rate or settings.SPEECH_SAMPLE_RATE,
         )
         
     except Exception as e:

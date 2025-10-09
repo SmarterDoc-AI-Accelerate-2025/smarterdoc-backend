@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时语音转录演示 - Speech-to-Text Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        select {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            background: white;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select:focus {
+            border-color: #667eea;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .status.idle {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.recording {
+            background: #ffebee;
+            color: #c62828;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .status.error {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .transcript-container {
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .transcript-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .transcript-interim {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            font-style: italic;
+            color: #666;
+        }
+
+        .transcript-final {
+            background: #c8e6c9;
+            border-left: 4px solid #4caf50;
+            color: #1b5e20;
+        }
+
+        .transcript-text {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 5px;
+        }
+
+        .transcript-meta {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+        }
+
+        .info {
+            background: #e8eaf6;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #3f51b5;
+        }
+
+        .info strong {
+            color: #1a237e;
+        }
+
+        .recording-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #f44336;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 16px;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 实时语音转录</h1>
+        <p class="subtitle">Real-time Speech-to-Text with WebSocket</p>
+
+        <div class="controls">
+            <select id="languageSelect">
+                <option value="en-US">English (US)</option>
+                <option value="zh-CN">中文 (简体)</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어</option>
+                <option value="es-ES">Español</option>
+                <option value="fr-FR">Français</option>
+            </select>
+
+            <button id="startBtn" class="btn btn-start">
+                开始录音 / Start Recording
+            </button>
+
+            <button id="stopBtn" class="btn btn-stop" disabled>
+                停止录音 / Stop Recording
+            </button>
+        </div>
+
+        <div id="status" class="status idle">
+            状态: 就绪 / Status: Ready
+        </div>
+
+        <div class="transcript-container" id="transcriptContainer">
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+                <div>点击"开始录音"按钮开始<br>Click "Start Recording" to begin</div>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>📋 说明 / Instructions:</strong><br>
+            1. 选择语言 / Select language<br>
+            2. 点击"开始录音"并允许麦克风权限 / Click "Start Recording" and allow microphone access<br>
+            3. 开始说话，实时转录结果会显示在上方 / Start speaking, transcription will appear above<br>
+            4. 点击"停止录音"结束 / Click "Stop Recording" to finish<br><br>
+            <strong>⚙️ 技术 / Technology:</strong> WebSocket + Google Cloud Speech-to-Text API
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let mediaRecorder = null;
+        let audioContext = null;
+        let streamSource = null;
+        let processor = null;
+        let isRecording = false;
+        let startTime = 0;
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDiv = document.getElementById('status');
+        const transcriptContainer = document.getElementById('transcriptContainer');
+        const languageSelect = document.getElementById('languageSelect');
+
+        // Update status display
+        function updateStatus(message, type = 'idle') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        // Add transcript to display
+        function addTranscript(text, isFinal, confidence = null) {
+            // Remove empty state
+            const emptyState = transcriptContainer.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const item = document.createElement('div');
+            item.className = 'transcript-item transcript-final';
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'transcript-text';
+            textDiv.textContent = text;
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'transcript-meta';
+            
+            const timeSpan = document.createElement('span');
+            const now = new Date();
+            timeSpan.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            
+            const confSpan = document.createElement('span');
+            if (confidence !== null) {
+                confSpan.textContent = `置信度 / Confidence: ${(confidence * 100).toFixed(1)}%`;
+            }
+            
+            metaDiv.appendChild(timeSpan);
+            metaDiv.appendChild(confSpan);
+            
+            item.appendChild(textDiv);
+            item.appendChild(metaDiv);
+            
+            // Always append (no interim results anymore)
+            transcriptContainer.appendChild(item);
+
+            // Auto scroll to bottom
+            transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+        }
+
+        // Convert Float32Array to Int16Array (LINEAR16 PCM)
+        function float32ToInt16(buffer) {
+            const int16 = new Int16Array(buffer.length);
+            for (let i = 0; i < buffer.length; i++) {
+                const s = Math.max(-1, Math.min(1, buffer[i]));
+                int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return int16;
+        }
+
+        // Start recording
+        async function startRecording() {
+            try {
+                updateStatus('🎤 正在请求麦克风权限... / Requesting microphone access...', 'recording');
+
+                // Get microphone stream
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+
+                updateStatus('🔌 正在连接服务器... / Connecting to server...', 'recording');
+
+                // Connect WebSocket (dynamically use current host)
+                const language = languageSelect.value;
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsHost = window.location.host;
+                const wsUrl = `${wsProtocol}//${wsHost}/api/v1/speech/stream/websocket?language_code=${language}&sample_rate=16000`;
+                console.log('Connecting to WebSocket:', wsUrl);
+                websocket = new WebSocket(wsUrl);
+
+                websocket.onopen = async () => {
+                    console.log('WebSocket connected, readyState:', websocket.readyState);
+                    startTime = Date.now();
+                    updateStatus('🎙️ 正在录音... 请开始说话 / Recording... Please speak', 'recording');
+                    isRecording = true;
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    
+                    // Resume audio context if suspended (Chrome requirement)
+                    if (audioContext && audioContext.state === 'suspended') {
+                        console.log('AudioContext is suspended, resuming...');
+                        await audioContext.resume();
+                        console.log('AudioContext resumed, state:', audioContext.state);
+                    }
+                    
+                    console.log('WebSocket ready, waiting for audio data...');
+                };
+
+                let lastTranscriptTime = Date.now();
+                websocket.onmessage = (event) => {
+                    const result = JSON.parse(event.data);
+                    console.log('✅ Received result from server:', result);
+
+                    if (result.error) {
+                        console.error('❌ Error in result:', result.error);
+                        updateStatus(`❌ 错误 / Error: ${result.error}`, 'error');
+                        return;
+                    }
+
+                    if (result.transcript && result.transcript.trim()) {
+                        console.log('📝 Transcript:', result.transcript, 'is_final:', result.is_final);
+                        
+                        // Only show final results (with actual content)
+                        if (result.is_final) {
+                            console.log('✅ Adding final transcript to UI:', result.transcript);
+                            addTranscript(
+                                result.transcript,
+                                result.is_final,
+                                result.confidence
+                            );
+                            lastTranscriptTime = Date.now();
+                            
+                            // Update status to show we're still listening
+                            const duration = Math.floor((Date.now() - startTime) / 1000);
+                            updateStatus(`🎙️ 正在录音... (${duration}s) / Recording... (${duration}s)`, 'recording');
+                        } else {
+                            console.log('⏳ Received interim result (not showing):', result.transcript);
+                        }
+                    } else {
+                        console.log('⚠️ Received message but no valid transcript');
+                    }
+                };
+
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    updateStatus('❌ 连接错误 / Connection error', 'error');
+                    stopRecording();
+                };
+
+                websocket.onclose = () => {
+                    console.log('WebSocket closed');
+                    if (isRecording) {
+                        updateStatus('🔌 连接已关闭 / Connection closed', 'idle');
+                        stopRecording();
+                    }
+                };
+
+                // Setup audio processing
+                console.log('Setting up audio context...');
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+                console.log('AudioContext created, sample rate:', audioContext.sampleRate);
+                
+                streamSource = audioContext.createMediaStreamSource(stream);
+                console.log('Media stream source created');
+                
+                // Use ScriptProcessorNode (deprecated but still widely supported)
+                // For production, consider using AudioWorklet
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                console.log('ScriptProcessor created with buffer size 4096');
+                
+                let audioChunkCount = 0;
+                processor.onaudioprocess = (e) => {
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        const int16Data = float32ToInt16(inputData);
+                        
+                        try {
+                            // Check buffer size before sending
+                            const bufferSize = websocket.bufferedAmount;
+                            if (bufferSize > 1024 * 1024) { // 1MB
+                                console.warn(`WebSocket buffer is getting full: ${bufferSize} bytes`);
+                            }
+                            
+                            websocket.send(int16Data.buffer);
+                            audioChunkCount++;
+                            
+                            if (audioChunkCount === 1) {
+                                console.log(`✓ Sent first audio chunk (${int16Data.length * 2} bytes)`);
+                            } else if (audioChunkCount % 10 === 0) {
+                                console.log(`✓ Sent ${audioChunkCount} audio chunks (${int16Data.length * 2} bytes each), buffer: ${bufferSize} bytes`);
+                            }
+                        } catch (error) {
+                            console.error('Error sending audio data:', error);
+                        }
+                    } else {
+                        if (audioChunkCount > 0) {
+                            console.warn(`WebSocket not open! State: ${websocket ? websocket.readyState : 'null'}`);
+                        }
+                    }
+                };
+
+                streamSource.connect(processor);
+                processor.connect(audioContext.destination);
+                console.log('Audio pipeline connected');
+                
+                // Resume audio context immediately (required for Chrome)
+                if (audioContext.state === 'suspended') {
+                    console.log('Resuming AudioContext...');
+                    await audioContext.resume();
+                }
+                console.log('AudioContext state:', audioContext.state);
+
+                // Store stream for cleanup
+                mediaRecorder = stream;
+                
+                console.log('Audio setup complete, waiting for audio processing events...');
+
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                updateStatus(`❌ 错误 / Error: ${error.message}`, 'error');
+                stopRecording();
+            }
+        }
+
+        // Stop recording
+        function stopRecording() {
+            isRecording = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+
+            // Close WebSocket
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send('close');
+                websocket.close();
+            }
+            websocket = null;
+
+            // Stop audio processing
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+
+            if (streamSource) {
+                streamSource.disconnect();
+                streamSource = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            // Stop microphone
+            if (mediaRecorder) {
+                mediaRecorder.getTracks().forEach(track => track.stop());
+                mediaRecorder = null;
+            }
+
+            updateStatus('✓ 录音已停止 / Recording stopped', 'idle');
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (isRecording) {
+                stopRecording();
+            }
+        });
+    </script>
+</body>
+</html>
+

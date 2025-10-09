@@ -39,6 +39,33 @@ class Settings(BaseSettings):
     INDEXER_BATCH_SIZE: int = 100
     INDEXER_MAX_CONCURRENCY: int = 10
 
+    # ============================================
+    # AI Chat & Gen AI Configuration
+    # ============================================
+    # Generation Configuration
+    GENAI_TEMPERATURE: float = 0.7
+    GENAI_TOP_P: float = 0.95
+    GENAI_TOP_K: int = 40
+    GENAI_MAX_OUTPUT_TOKENS: int = 8192
+    
+    # Safety Settings
+    GENAI_SAFETY_THRESHOLD: str = "BLOCK_MEDIUM_AND_ABOVE"
+    
+    # ============================================
+    # Speech-to-Text Configuration
+    # ============================================
+    # Audio configuration
+    SPEECH_SAMPLE_RATE: int = 16000
+    SPEECH_LANGUAGE_CODE: str = "en-US"
+    SPEECH_ENCODING: str = "LINEAR16"
+    SPEECH_MODEL: str = "default"
+    
+    # Enable automatic punctuation
+    SPEECH_ENABLE_AUTOMATIC_PUNCTUATION: bool = True
+    
+    # Single utterance mode (stop after detecting end of speech)
+    SPEECH_SINGLE_UTTERANCE: bool = False
+
     # TWILIO_ACCOUNT_SID: str | None = None
     # TWILIO_AUTH_TOKEN: str | None = None
     # TWILIO_CALLER_NUMBER: str | None = None

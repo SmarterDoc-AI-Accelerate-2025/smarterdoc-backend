@@ -2,8 +2,11 @@
 Main FastAPI application for AI Chat service.
 """
 import logging
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .api.v1 import router as v1_router
 from .config import ChatConfig
@@ -35,6 +38,30 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(v1_router, prefix="/api")
+
+# Mount static files
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/")
+async def root():
+    """Root endpoint - redirect to speech demo."""
+    return {
+        "message": "AI Chat Service API",
+        "docs": "/docs",
+        "speech_demo": "/static/speech_demo.html"
+    }
+
+
+@app.get("/demo")
+async def demo():
+    """Serve the speech demo page."""
+    demo_file = static_dir / "speech_demo.html"
+    if demo_file.exists():
+        return FileResponse(demo_file)
+    return {"error": "Demo page not found"}
 
 
 @app.on_event("startup")
