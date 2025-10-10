@@ -200,23 +200,6 @@ class HealthCheckResponse(BaseModel):
 # Speech-to-Text Schemas
 # ============================================
 
-class SpeechTranscribeRequest(BaseModel):
-    """Request model for transcribing audio file."""
-    language_code: Optional[str] = Field(
-        default=None,
-        description="Language code (e.g., 'en-US', 'zh-CN')"
-    )
-    sample_rate: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Audio sample rate in Hz"
-    )
-    enable_automatic_punctuation: Optional[bool] = Field(
-        default=None,
-        description="Enable automatic punctuation"
-    )
-
-
 class SpeechStreamRequest(BaseModel):
     """Request model for streaming speech transcription."""
     language_code: Optional[str] = Field(
@@ -251,15 +234,6 @@ class SpeechTranscriptionResult(BaseModel):
     )
 
 
-class SpeechTranscriptionResponse(BaseModel):
-    """Response model for speech transcription."""
-    transcript: str = Field(..., description="Final transcribed text")
-    confidence: Optional[float] = Field(
-        default=None,
-        description="Confidence score (0-1)"
-    )
-    language_code: str = Field(..., description="Language code used")
-    sample_rate: int = Field(..., description="Sample rate used (Hz)")
 # New schemas for frontend integration
 class FrontendSearchRequest(BaseModel):
     query: Optional[str] = None
