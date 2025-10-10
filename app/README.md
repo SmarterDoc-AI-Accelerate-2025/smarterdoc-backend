@@ -59,7 +59,7 @@ ELASTIC_URL=http://localhost:9200
 
 ```bash
 # Development mode
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 # Or use Docker Compose (includes Elasticsearch)
 docker compose up --build
@@ -67,9 +67,9 @@ docker compose up --build
 
 ### Access the API
 
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-- **Speech Demo**: http://localhost:8000/static/speech_demo.html
+- **API Documentation**: http://localhost:8080/docs
+- **Health Check**: http://localhost:8080/health
+- **Speech Demo**: http://localhost:8080/static/speech_demo.html
 
 ## API Endpoints Overview
 
@@ -103,7 +103,7 @@ import httpx
 
 async with httpx.AsyncClient() as client:
     response = await client.post(
-        "http://localhost:8000/api/v1/chat/",
+        "http://localhost:8080/api/v1/chat/",
         json={
             "message": "Hello, please introduce yourself",
             "temperature": 0.7
@@ -119,7 +119,7 @@ import httpx
 with httpx.Client() as client:
     with client.stream(
         'POST',
-        'http://localhost:8000/api/v1/chat/stream',
+        'http://localhost:8080/api/v1/chat/stream',
         json={"message": "Tell me a story"}
     ) as response:
         for chunk in response.iter_text():
@@ -133,7 +133,7 @@ import httpx
 async with httpx.AsyncClient() as client:
     with open("audio.wav", "rb") as f:
         response = await client.post(
-            "http://localhost:8000/api/v1/speech/transcribe",
+            "http://localhost:8080/api/v1/speech/transcribe",
             files={"file": f},
             params={"language_code": "en-US"}
         )
@@ -141,7 +141,7 @@ async with httpx.AsyncClient() as client:
 ```
 
 ### WebSocket Real-time Transcription
-Visit http://localhost:8000/static/speech_demo.html for a complete browser demo.
+Visit http://localhost:8080/static/speech_demo.html for a complete browser demo.
 
 ## Project Structure
 
@@ -217,7 +217,7 @@ docker build -t smarterdoc-backend .
 
 ### Run Container
 ```bash
-docker run -p 8000:8000 \
+docker run -p 8080:8080 \
   -e GCP_PROJECT_ID=your-project-id \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
   -v /path/to/credentials.json:/app/credentials.json \
@@ -280,5 +280,5 @@ Follows the main repository's license.
 
 ---
 
-**Need help?** Check the [API Documentation](http://localhost:8000/docs) or submit an issue.
+**Need help?** Check the [API Documentation](http://localhost:8080/docs) or submit an issue.
 
