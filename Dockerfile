@@ -1,6 +1,3 @@
-# -----------------------
-# Base image
-# -----------------------
 FROM python:3.11-slim
 
 # Install system dependencies
@@ -9,28 +6,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# -----------------------
-# Make sure Python can import from /app
-# -----------------------
+# Ensure Python can find modules in this path
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# -----------------------
-# Install Python dependencies
-# -----------------------
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# -----------------------
-# Copy application
-# -----------------------
+# Copy app
 COPY app ./app
 COPY .env.example .env
 
-# -----------------------
-# Runtime configuration
-# -----------------------
+# Expose and run
 EXPOSE 8080
-
-# ✅ Start FastAPI using the $PORT Cloud Run injects
 CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
