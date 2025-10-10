@@ -10,6 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # -----------------------
+# Make sure Python can import from /app
+# -----------------------
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# -----------------------
 # Install Python dependencies
 # -----------------------
 COPY requirements.txt .
@@ -24,8 +30,7 @@ COPY .env.example .env
 # -----------------------
 # Runtime configuration
 # -----------------------
-ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
-# Use shell form so ${PORT} expands correctly in Cloud Run
+# ✅ Start FastAPI using the $PORT Cloud Run injects
 CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
