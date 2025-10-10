@@ -2,6 +2,7 @@
 
 ## GCP Link
 Backend Link: https://smarterdoc-backend-1094971678787.us-central1.run.app
+
 Test End Point: https://smarterdoc-backend-1094971678787.us-central1.run.app/hello
 
 ## Getting Started
@@ -63,7 +64,7 @@ pip install -r requirements.txt
 
 # Install development dependencies (for local audio recording)
 pip install -r requirements-dev.txt
-
+```
 ---
 
 ## 🏥 NPI Data Extraction Tools
