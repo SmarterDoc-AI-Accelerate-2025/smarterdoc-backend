@@ -16,33 +16,33 @@ app = FastAPI(
     description="SmarterDoc Backend API with AI Chat and Speech-to-Text capabilities"
 )
 
-# Add startup logging
-@app.on_event("startup")
-async def startup_event():
-    port = int(os.environ.get("PORT", 8080))
-    log.info(f" Starting SmarterDoc Backend on port {port}")
-    log.info(f" Environment: {settings.ENVIRONMENT}")
-    log.info(" Application startup complete")
-
-
-# Configure CORS - Following ai_chat working pattern
-log.info(f"🌐 CORS: Allowing all origins ({'development' if settings.ENVIRONMENT == 'dev' else 'production'} mode)")
+# Configure CORS FIRST - before any routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for WebSocket compatibility
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routers FIRST (like ai_chat)
-app.include_router(api_router, prefix="/api")
+# Add startup logging
+@app.on_event("startup")
+async def startup_event():
+    port = int(os.environ.get("PORT", 8080))
+    log.info(f"Starting SmarterDoc Backend on port {port}")
+    log.info(f"Environment: {settings.ENVIRONMENT}")
+    log.info("Application startup complete")
+    log.info("CORS configured for frontend domains")
 
-# Mount static files AFTER routes (like ai_chat)
+# Include API routers
+app.include_router(api_router, prefix="/api")
+log.info("API routes included")
+
+# Mount static files
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-    log.info(f"✓ Mounted static files from {static_dir}")
+    log.info(f"✅ Mounted static files from {static_dir}")
 
 # Root endpoints
 @app.get("/")
@@ -53,7 +53,6 @@ async def root():
         "version": "0.1.0",
         "status": "running",
         "docs": "/docs",
-        "speech_demo": "/static/speech_demo.html",
         "environment": settings.ENVIRONMENT
     }
 
@@ -75,3 +74,18 @@ def health_check():
 def hello_world():
     """Hello world endpoint."""
     return {"message": "Hello Hogan"}
+
+# Add a test endpoint for CORS
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    """Handle preflight OPTIONS requests for CORS"""
+    return {}
+
+@app.get("/cors-test")
+async def cors_test():
+    """Test endpoint to verify CORS is working"""
+    return {
+        "message": "CORS test successful",
+        "cors_enabled": True,
+        "frontend_url": "https://smarterdoc-frontend-1094971678787.us-central1.run.app"
+    }
