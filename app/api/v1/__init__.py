@@ -5,6 +5,7 @@ from .book import router as book_router
 from .chat import router as chat_router
 from .speech import router as speech_router
 
+# Main API router - prefix is added in main.py
 api_router = APIRouter(prefix="/v1")
 api_router.include_router(search_router, prefix="/search", tags=["search"])
 api_router.include_router(rank_router, prefix="/rank", tags=["rank"])

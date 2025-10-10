@@ -6,7 +6,7 @@ Reference: https://cloud.google.com/speech-to-text/docs/transcribe-streaming-aud
 import logging
 from typing import AsyncIterator, Optional, Generator
 from google.cloud import speech
-import pyaudio
+# NOTE: pyaudio is only imported when needed (lazy import) to avoid Cloud Run issues
 
 from app.config import settings
 
@@ -204,6 +204,15 @@ class SpeechToTextService:
         Yields:
             Dictionary containing transcription results
         """
+        # Lazy import pyaudio only when needed (not available in Cloud Run)
+        try:
+            import pyaudio
+        except ImportError:
+            raise RuntimeError(
+                "PyAudio is not available. Microphone capture is not supported in this environment. "
+                "This feature is only available in local development with PyAudio installed."
+            )
+        
         # Audio recording parameters
         sample_rate = getattr(settings, 'SPEECH_SAMPLE_RATE', 16000)
         audio_format = pyaudio.paInt16
