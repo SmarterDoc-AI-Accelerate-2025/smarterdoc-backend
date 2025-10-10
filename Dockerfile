@@ -14,11 +14,10 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app
+# Copy source code
 COPY app ./app
 COPY .env.example .env
 
 # Expose and run
 EXPOSE 8080
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
-
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
