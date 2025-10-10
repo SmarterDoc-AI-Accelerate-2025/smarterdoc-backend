@@ -73,6 +73,12 @@ class EnrichedProfileData(BaseModel):
         description=
         "A list of 1-3 major hospitals or clinics where the doctor holds current privileges or works."
     )
+    latitude: float = Field(
+        description=
+        "The decimal latitude coordinate of the primary practice location.")
+    longitude: float = Field(
+        description=
+        "The decimal longitude coordinate of the primary practice location.")
 
 
 # Rank

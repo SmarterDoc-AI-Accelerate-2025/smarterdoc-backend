@@ -1,3 +1,5 @@
+# app/services/gcs_media_client.py
+
 import requests
 from google.cloud import storage
 from typing import Dict, Any, Optional
@@ -5,9 +7,19 @@ from app.config import settings
 from app.util.logging import logger
 
 # --- Configuration (using Google Custom Search API as placeholder) ---
-# TODO: configure a Google Custom Search Engine (CSE) with Image Search enabled
-# to get valid API_KEY and CSE_ID.
 SEARCH_API_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
+
+# FIX: Define AGGRESSIVE HEADERS to bypass hotlinking and anti-scraping measures.
+HEADERS = {
+    # 1. User-Agent: Pretend to be a common browser
+    'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    # 2. Referer: Pretend the request came from Google Images itself (crucial for bypassing hotlink blocks)
+    'Referer': 'https://www.google.com/',
+    # 3. Accept: Tell the server we only want image data
+    'Accept':
+    'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+}
 
 
 class GCSMediaClient:
@@ -42,7 +54,7 @@ class GCSMediaClient:
             "cx": self.cse_id,
             "q": query,
             "searchType": "image",  # Crucial for Google Image Search
-            "num": 1  # Only need the top result
+            "num": 1
         }
 
         try:
@@ -63,13 +75,6 @@ class GCSMediaClient:
                         blob_name: str) -> Optional[str]:
         """
         Downloads the image from the external URL and uploads it to GCS.
-        
-        Args:
-            external_url: The temporary URL found by the search.
-            blob_name: The target filename in GCS (e.g., 'npi-12345.jpg').
-            
-        Returns:
-            The permanent, public GCS URL.
         """
         if not self.bucket_name:
             return None
@@ -78,25 +83,27 @@ class GCSMediaClient:
         blob = bucket.blob(f"doctor_media/{blob_name}")
 
         try:
-            # 1. Download image data
+            # 1. Download image data (FIX: Inject Aggressive Headers here)
             image_response = requests.get(external_url,
                                           stream=True,
-                                          timeout=15)
+                                          timeout=15,
+                                          headers=HEADERS)  # <-- FIX IS HERE
             image_response.raise_for_status(
-            )  # Raise exception for bad status codes
+            )  # Will raise 403 Forbidden if headers fail
 
             # 2. Upload to GCS
             blob.upload_from_string(image_response.content,
                                     content_type=image_response.headers.get(
                                         'Content-Type', 'image/jpeg'))
 
-            # 3. Make the file publicly readable (required for easy frontend display)
+            # 3. Make the file publicly readable
             blob.make_public()
 
             logger.info(f"Successfully uploaded {blob_name} to GCS.")
-            return blob.public_url  # Returns the permanent storage URL
+            return blob.public_url
 
         except Exception as e:
+            # This catch will now log the specific 403 or 404 if the headers still fail.
             logger.error(f"Failed to upload image {external_url}: {e}")
             return None
 

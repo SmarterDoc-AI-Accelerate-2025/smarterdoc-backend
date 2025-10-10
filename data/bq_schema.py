@@ -66,7 +66,16 @@ def get_profiles_schema() -> List[SchemaField]:
                     "STRING",
                     mode="REPEATED",
                     description="List of hospitals/clinics affiliated with."),
-
+        SchemaField(
+            "latitude",
+            "FLOAT64",
+            description=
+            "Decimal latitude coordinate of the primary practice location."),
+        SchemaField(
+            "longitude",
+            "FLOAT64",
+            description=
+            "Decimal longitude coordinate of the primary practice location."),
         # Array of Records for Ratings (to preserve source granularity)
         SchemaField(
             "ratings",

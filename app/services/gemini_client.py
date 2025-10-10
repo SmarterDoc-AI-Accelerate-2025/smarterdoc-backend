@@ -1,7 +1,7 @@
 import json
 import time
 from typing import List, Dict, Any, Tuple
-
+import re
 from google import genai
 from google.genai import types
 
@@ -48,6 +48,35 @@ class EnrichedProfileData(BaseModel):
         description=
         "Summary of key patient testimonials and overall feedback to help new patients"
     )
+    latitude: float = Field(
+        description=
+        "The decimal latitude coordinate of the primary practice location.")
+    longitude: float = Field(
+        description=
+        "The decimal longitude coordinate of the primary practice location.")
+
+
+def _clean_llm_artifacts(text: str) -> str:
+    """
+    Strips out known artifacts (like token indices) that the LLM occasionally 
+    embeds into text fields, which corrupt the output.
+    """
+    if not text:
+        return text
+
+    # Pattern 1: Matches [INDEX 1, 2, 3, ...] or [INDEX 1] artifacts
+    text = re.sub(r'\[INDEX\s+\d+(?:,\s*\d+)*\]',
+                  '',
+                  text,
+                  flags=re.IGNORECASE)
+
+    # Pattern 2: Matches artifact text like INDEX_1256 that occasionally appears
+    text = re.sub(r'INDEX_\d+', '', text, flags=re.IGNORECASE)
+
+    # Pattern 3: Matches leftover JSON keys that might leak out of the structure
+    # Example: "{"source": "Vitals", INDEX_123: 0, "score": 4.5}" -> Not perfect, but helps.
+
+    return text.strip()
 
 
 class GeminiClient:
@@ -126,6 +155,8 @@ class GeminiClient:
         if not json_str:
             return {}
 
+        json_str = _clean_llm_artifacts(json_str)
+
         try:
             # Validate and convert the JSON string to a Python dictionary
             extracted_dict = EnrichedProfileData.model_validate_json(
@@ -149,7 +180,7 @@ class GeminiClient:
         empty_result = {}, []
 
         config = types.GenerateContentConfig(
-            max_output_tokens=8192,
+            max_output_tokens=16384,
             # model grounding
             tools=[types.Tool(google_search=types.GoogleSearch())],
             response_mime_type="application/json",
@@ -178,9 +209,17 @@ class GeminiClient:
                 f"Gemini returned empty JSON string. Reason: {candidate.finish_reason.name}"
             )
             return empty_result
+
+        json_str = _clean_llm_artifacts(json_str)
+
         try:
             extracted_dict = EnrichedProfileData.model_validate_json(
                 json_str).model_dump()
+
+            extracted_dict['bio_text_consolidated'] = _clean_llm_artifacts(
+                extracted_dict.get('bio_text_consolidated', ''))
+            extracted_dict['testimonial_summary_text'] = _clean_llm_artifacts(
+                extracted_dict.get('testimonial_summary_text', ''))
         except Exception as e:
             # This handles the JSONDecodeError (EOF) and Pydantic validation errors
             logger.error(
@@ -221,7 +260,7 @@ class GeminiClient:
                                                 auto_truncate=True))
 
             # response object now contains the embeddings property
-            embeddings = [p.value for p in response.embeddings]
+            embeddings = [p.values for p in response.embeddings]
 
             logger.info(f"Generated embeddings for {len(embeddings)} texts.")
             return embeddings

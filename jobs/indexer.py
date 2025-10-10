@@ -85,9 +85,13 @@ async def enrich_single_doctor(
             f"""As a medical data expert, find the official profile and review information for 
     Dr. {name}, a specialist in {specialty}. Extract their years of experience, 
     average patient ratings, key publications, and a profile picture URL.
-    Find our their education (which school they got their MD), and list out the hospitals they have worked and currently work at, as well
-    as where they did their residency.
+    For the 'education' list, include the names of ALL medical schools, residencies, and fellowships.
+    For the 'hospitals' list, include the names of ALL hospital and major clinical affiliations.
+    
+    Find the doctor's primary practice location and use Google Search to find its **precise latitude and longitude coordinates**.
+    
     Summarize key patient testimonials to help new patients make informed decisions.
+    
     Use Google Search as your tool. Calculate years of experience from their graduation or residency end date."""
         )
 
@@ -155,11 +159,12 @@ async def enrich_single_doctor(
         "years_experience": extracted_dict.get('years_experience'),
         "testimonial_summary_text":
         extracted_dict.get('testimonial_summary_text'),
-        "ratings": extracted_dict.get('ratings_summary', []),
-        "publications": extracted_dict.get('publications', []),
+        "latitude": extracted_dict.get('latitude'),
+        "longitude": extracted_dict.get('longitude'),
         "education": extracted_dict.get('education', []),
         "hospitals": extracted_dict.get('hospitals', []),
-
+        "ratings": extracted_dict.get('ratings_summary', []),
+        "publications": extracted_dict.get('publications', []),
         # Vector and Timestamp
         "bio_vector": vector_result,
         "updated_at": datetime.datetime.now().isoformat()
