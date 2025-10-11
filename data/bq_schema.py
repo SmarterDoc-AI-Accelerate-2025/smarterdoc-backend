@@ -1,23 +1,24 @@
 import os
 from google.cloud import bigquery
-from google.cloud.bigquery import SchemaField, Dataset
-from typing import List
+from google.cloud.bigquery import SchemaField
+from typing import List, Optional
 from app.config import settings
+from app.deps import get_bq_sync
 
 PROJECT_ID = settings.GCP_PROJECT_ID
 CURATED_DATASET = settings.BQ_CURATED_DATASET
 PROFILES_TABLE = settings.BQ_PROFILES_TABLE
 
 
-def create_bq_client():
-    """Initializes and returns the BigQuery client."""
-    if not PROJECT_ID:
-        raise ValueError("GCP_PROJECT_ID is not set in environment or config.")
-    return bigquery.Client(project=PROJECT_ID)
+def get_bq_client(client: Optional[bigquery.Client] = None) -> bigquery.Client:
+    """Gets global bq client."""
+    return client or get_bq_sync()
 
 
-def create_dataset_if_not_exists(client: bigquery.Client, dataset_id: str):
+def create_dataset_if_not_exists(client: Optional[bigquery.Client],
+                                 dataset_id: str):
     """Creates a BigQuery dataset if it doesn't exist."""
+    client = get_bq_client(client)
     dataset_ref = client.dataset(dataset_id)
     try:
         client.get_dataset(dataset_ref)
@@ -82,6 +83,9 @@ def get_profiles_schema() -> List[SchemaField]:
             "FLOAT64",
             description=
             "Decimal longitude coordinate of the primary practice location."),
+        SchemaField("address",
+                    "STRING",
+                    description="Formatted practice address."),
         # Array of Records for Ratings (to preserve source granularity)
         SchemaField(
             "ratings",
@@ -105,11 +109,12 @@ def get_profiles_schema() -> List[SchemaField]:
     ]
 
 
-def create_doctor_profiles_table(client: bigquery.Client):
+def create_doctor_profiles_table(client: Optional[bigquery.Client]):
     """
     Creates the curated.doctor_profiles table OR performs schema evolution 
     (ALTER TABLE) if the table already exists.
     """
+    client = get_bq_client()
     table_id = f"{PROJECT_ID}.{CURATED_DATASET}.{PROFILES_TABLE}"
     target_schema = get_profiles_schema()
 
@@ -141,31 +146,27 @@ def create_doctor_profiles_table(client: bigquery.Client):
                     columns_to_add.append(target_field)
 
             if columns_to_add:
-                # Build the ALTER TABLE DDL command
                 alter_statements = []
                 for field in columns_to_add:
-                    # FIX: Correct BigQuery DDL Syntax for ARRAY (REPEATED mode)
-                    if field.mode == 'REPEATED':
-                        # ARRAY of type is the correct syntax; do NOT add 'REPEATED' keyword
+                    if field.mode == 'REPEATED' and field.field_type != "RECORD":
                         type_def = f"ARRAY<{field.field_type}>"
                     elif field.mode == 'REQUIRED':
-                        # Handles non-array required fields
                         type_def = f"{field.field_type} NOT NULL"
+                    # to add nested records would need to write STRUCT DDL (not needed right now)
+                    elif field.field_type == "RECORD":
+                        raise RuntimeError(
+                            f"Nested field '{field.name}' cannot be auto-added by this helper."
+                        )
                     else:
-                        # Handles NULLABLE fields
                         type_def = field.field_type
 
-                    # Build the full statement (ADD COLUMN name type OPTIONS(description))
+                    desc = field.description or ""
                     alter_statements.append(
-                        f"ADD COLUMN {field.name} {type_def} OPTIONS(description='{field.description}')"
+                        f"ADD COLUMN {field.name} {type_def} OPTIONS(description='{desc}')"
                     )
 
                 full_alter_query = f"ALTER TABLE `{table_id}` {', '.join(alter_statements)}"
-
-                # Execute the ALTER TABLE query
-                query_job = client.query(full_alter_query)
-                query_job.result()  # Wait for the job to complete
-
+                client.query(full_alter_query).result()
                 print(
                     f"Successfully ran ALTER TABLE to add {len(columns_to_add)} column(s)."
                 )
@@ -178,7 +179,7 @@ def create_doctor_profiles_table(client: bigquery.Client):
 
 def create_curated_tables():
     """Orchestrates the creation of all final BigQuery tables."""
-    client = create_bq_client()
+    client = get_bq_client()
 
     # curated dataset
     create_dataset_if_not_exists(client, CURATED_DATASET)

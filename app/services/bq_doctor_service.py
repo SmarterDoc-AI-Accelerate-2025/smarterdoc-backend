@@ -1,16 +1,12 @@
 from google.cloud import bigquery
 import json
 from app.config import settings
-from google.auth import default
 
 
 class BQDoctorService:
 
-    def __init__(self):
-        credentials, project = default()
-        self.client = bigquery.Client(project=project
-                                      or settings.GCP_PROJECT_ID,
-                                      credentials=credentials)
+    def __init__(self, client: bigquery.Client):
+        self.client = client
         self.table = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
 
     def _ensure_list(self, v):
@@ -87,6 +83,3 @@ class BQDoctorService:
 
             out.append(d)
         return out
-
-
-bq_doctor_service = BQDoctorService()
