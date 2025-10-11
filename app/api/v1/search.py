@@ -3,40 +3,41 @@ from ...models.schemas import (SearchRequest, SearchResponse,
                                FrontendSearchRequest, FrontendSearchResponse,
                                VoiceSearchRequest)
 from ...services.elastic_client import hybrid_search
-from ...deps import get_elastic
+from ...deps import get_bq
 from ...services.mock_doctor_service import mock_doctor_service
-from app.services.bq_doctor_service import bq_doctor_service
+from app.services.bq_doctor_service import BQDoctorService
+from google.cloud import bigquery
 
 router = APIRouter()
 
-
-@router.post("", response_model=SearchResponse)
-def search(req: SearchRequest, es=Depends(get_elastic)):
-    """
-    Original search endpoint - at /v1/search
-    """
-    try:
-        hits = hybrid_search(req, es)
-        return SearchResponse(candidates=hits)
-    except Exception as e:
-        # Log the error for debugging
-        print(f"Error in hybrid_search: {str(e)}")
-        raise HTTPException(status_code=500,
-                            detail=f"Search service error: {str(e)}")
+# @router.post("", response_model=SearchResponse)
+# def search(req: SearchRequest, es=Depends(get_elastic)):
+#     """
+#     Original search endpoint - at /v1/search
+#     """
+#     try:
+#         hits = hybrid_search(req, es)
+#         return SearchResponse(candidates=hits)
+#     except Exception as e:
+#         # Log the error for debugging
+#         print(f"Error in hybrid_search: {str(e)}")
+#         raise HTTPException(status_code=500,
+#                             detail=f"Search service error: {str(e)}")
 
 
 @router.post("/doctors", response_model=FrontendSearchResponse)
-def search_doctors(req: FrontendSearchRequest):
+def search_doctors(req: FrontendSearchRequest,
+                   bq: bigquery.Client = Depends(get_bq)):
     """
     Real-time doctor search from BigQuery.
     Filters: specialty, years_experience, certification.
     """
     try:
-        doctors = bq_doctor_service.search_doctors(
-            specialty=req.specialty,
-            min_experience=req.min_experience,
-            has_certification=req.has_certification,
-            limit=req.limit or 30)
+        svc = BQDoctorService(client=bq)
+        doctors = svc.search_doctors(specialty=req.specialty,
+                                     min_experience=req.min_experience,
+                                     has_certification=req.has_certification,
+                                     limit=req.limit or 30)
         return FrontendSearchResponse(doctors=doctors,
                                       total_results=len(doctors),
                                       search_query=req.specialty)

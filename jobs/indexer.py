@@ -9,15 +9,14 @@ from google.cloud import bigquery
 from app.config import settings
 from app.services.gemini_client import GeminiClient
 from app.services.web_search import web_search_client, WebSearchClient
+from app.deps import get_bq_sync
 import time
 
-BQ_CLIENT = bigquery.Client(project=settings.GCP_PROJECT_ID)
+BQ_CLIENT = get_bq_sync()
 GEMINI_CLIENT = GeminiClient()
 
 OUT_DIR = os.environ.get("INDEXER_OUT_DIR", "./out")
 os.makedirs(OUT_DIR, exist_ok=True)
-
-# ELASTIC_CLIENT = ElasticClient()
 
 
 def _timestamp() -> str:
@@ -264,34 +263,6 @@ def load_data_to_bq(enriched_data: List[Dict[str, Any]],
                 time.sleep(sleep_s)
 
     print(f"-> Successfully loaded {total} records into BigQuery.")
-
-
-# def load_data(enriched_data: List[Dict[str, Any]]):
-#     """Writes data to BigQuery and ElasticSearch"""
-
-#     # BQ write
-#     table_id = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
-#     try:
-#         # BQ insert_rows_json expects python dictionaries
-#         errors = BQ_CLIENT.insert_rows_json(table_id, enriched_data)
-#         if errors:
-#             print(f"WARNING: Errors occurred inserting data into BQ: {errors}")
-#         else:
-#             print(
-#                 f"-> Successfully loaded {len(enriched_data)} records into BigQuery table {table_id}."
-#             )
-#     except Exception as e:
-#         print(f"FATAL ERROR during BQ Load: {e}")
-#         return
-
-#     # elastic Upsert
-#     try:
-#         # ELASTIC_CLIENT.bulk_upsert(enriched_data, index_name=settings.ELASTIC_INDEX_DOCTORS)
-#         print(
-#             f"-> Indexed {len(enriched_data)} records into ElasticSearch index {settings.ELASTIC_INDEX_DOCTORS} (Placeholder)."
-#         )
-#     except Exception as e:
-#         print(f"WARNING: Errors occurred during Elastic Upsert: {e}")
 
 
 def run_indexer_job():
