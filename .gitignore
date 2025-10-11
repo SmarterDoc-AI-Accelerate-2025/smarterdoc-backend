@@ -3,6 +3,9 @@
 npi_doctors_*.json
 *_multilevel.json
 *_unlimited.json
+media_tools/headshots
+headshots/
+
 
 # Python
 __pycache__/

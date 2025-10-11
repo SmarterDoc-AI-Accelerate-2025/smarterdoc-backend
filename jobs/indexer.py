@@ -4,17 +4,47 @@ import asyncio
 import datetime
 import json
 from typing import List, Dict, Any, Tuple
-
+import os
 from google.cloud import bigquery
 from app.config import settings
-from app.services.gemini_client import GeminiClient, EnrichedProfileData
+from app.services.gemini_client import GeminiClient
 from app.services.web_search import web_search_client, WebSearchClient
-from app.services.gcs_media_client import gcs_media_client
+import time
 
 BQ_CLIENT = bigquery.Client(project=settings.GCP_PROJECT_ID)
 GEMINI_CLIENT = GeminiClient()
 
+OUT_DIR = os.environ.get("INDEXER_OUT_DIR", "./out")
+os.makedirs(OUT_DIR, exist_ok=True)
+
 # ELASTIC_CLIENT = ElasticClient()
+
+
+def _timestamp() -> str:
+    return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def save_payload_jsonl(enriched_data: List[Dict[str, Any]]) -> str:
+    """
+    Saves each record on its own line (JSONL) so it scales and is easy to resume.
+    Returns the file path.
+    """
+    fn = os.path.join(OUT_DIR, f"enriched_doctors_{_timestamp()}.jsonl")
+    with open(fn, "w", encoding="utf-8") as f:
+        for row in enriched_data:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"-> Saved enriched payload to {fn}")
+    return fn
+
+
+def load_jsonl(filepath: str) -> List[Dict[str, Any]]:
+    data = []
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                data.append(json.loads(line))
+    print(f"-> Loaded {len(data)} records from {filepath}")
+    return data
 
 
 # Extraction
@@ -84,10 +114,19 @@ async def enrich_single_doctor(
         prompt = (
             f"""As a medical data expert, find the official profile and review information for 
     Dr. {name}, a specialist in {specialty}. Extract their years of experience, 
-    average patient ratings, key publications, and a profile picture URL.
+    average patient ratings, certifications, education, hospital affiliations, and key publications.
     For the 'education' list, include the names of ALL medical schools, residencies, and fellowships.
     For the 'hospitals' list, include the names of ALL hospital and major clinical affiliations.
-    
+    For example:
+        Dr. Jane Smith (Cardiology)
+        education: ["Harvard Medical School (MD, 2005)", "Massachusetts General Hospital (Residency)"]
+        hospitals: ["Massachusetts General Hospital", "Brigham and Women's Hospital"]
+        certifications: ["Board Certified in Cardiology"]
+        years_experience: 18
+        average_rating: 4.7
+        publications: ["Cardiac Outcomes in Post-Surgical Patients", "Advances in Echocardiography"]
+
+    Now, repeat this process for Dr. {name}.
     Find the doctor's primary practice location and use Google Search to find its **precise latitude and longitude coordinates**.
     
     Summarize key patient testimonials to help new patients make informed decisions.
@@ -138,13 +177,6 @@ async def enrich_single_doctor(
         )
         return {**doctor, "updated_at": datetime.datetime.now().isoformat()}
 
-    permanent_pic_url = gcs_media_client.acquire_and_upload_profile_pic(
-        doctor, str(doctor['npi']))
-
-    # Use the extracted URL from the LLM as a fallback if the image search fails
-    final_pic_url = permanent_pic_url if permanent_pic_url else extracted_dict.get(
-        'profile_picture_url', None)
-
     if text_to_embed:
         # Call the actual implementation (returns a list of vectors, we need the first one [0])
         vector_result = GEMINI_CLIENT.generate_embedding([text_to_embed])[0]
@@ -155,16 +187,17 @@ async def enrich_single_doctor(
         "last_name": doctor['last_name'],
         "primary_specialty": specialty,
         "bio": extracted_dict.get('bio_text_consolidated', text_to_embed),
-        "profile_picture_url": final_pic_url,
         "years_experience": extracted_dict.get('years_experience'),
         "testimonial_summary_text":
         extracted_dict.get('testimonial_summary_text'),
+        "profile_picture_url": None,
         "latitude": extracted_dict.get('latitude'),
         "longitude": extracted_dict.get('longitude'),
         "education": extracted_dict.get('education', []),
         "hospitals": extracted_dict.get('hospitals', []),
         "ratings": extracted_dict.get('ratings_summary', []),
         "publications": extracted_dict.get('publications', []),
+        "certifications": extracted_dict.get('certifications', []),
         # Vector and Timestamp
         "bio_vector": vector_result,
         "updated_at": datetime.datetime.now().isoformat()
@@ -186,38 +219,84 @@ async def transform_all_doctors(
 # load
 
 
-def load_data(enriched_data: List[Dict[str, Any]]):
-    """Writes data to BigQuery and ElasticSearch"""
-
-    # BQ write
+def load_data_to_bq(enriched_data: List[Dict[str, Any]],
+                    *,
+                    batch_size: int = 50,
+                    max_retries: int = 4):
+    """
+    Writes data to BigQuery in small batches with retries.
+    Uses load_table_from_json (LOAD job) instead of insert_rows_json (streaming),
+    which is more reliable and has server-side retries.
+    """
     table_id = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
-    try:
-        # BQ insert_rows_json expects python dictionaries
-        errors = BQ_CLIENT.insert_rows_json(table_id, enriched_data)
-        if errors:
-            print(f"WARNING: Errors occurred inserting data into BQ: {errors}")
-        else:
-            print(
-                f"-> Successfully loaded {len(enriched_data)} records into BigQuery table {table_id}."
-            )
-    except Exception as e:
-        print(f"FATAL ERROR during BQ Load: {e}")
-        return
+    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
 
-    # elastic Upsert
-    try:
-        # ELASTIC_CLIENT.bulk_upsert(enriched_data, index_name=settings.ELASTIC_INDEX_DOCTORS)
-        print(
-            f"-> Indexed {len(enriched_data)} records into ElasticSearch index {settings.ELASTIC_INDEX_DOCTORS} (Placeholder)."
-        )
-    except Exception as e:
-        print(f"WARNING: Errors occurred during Elastic Upsert: {e}")
+    total = len(enriched_data)
+    print(
+        f"-> Starting BigQuery load: {total} rows into {table_id} (batch={batch_size})"
+    )
+
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch = enriched_data[start:end]
+
+        # retry with exponential backoff (2^k seconds)
+        attempt = 0
+        while True:
+            try:
+                job = BQ_CLIENT.load_table_from_json(batch,
+                                                     table_id,
+                                                     job_config=job_config)
+                job.result()  # wait for completion
+                print(f"   ✓ Loaded rows {start}-{end-1}")
+                break
+            except Exception as e:
+                attempt += 1
+                if attempt > max_retries:
+                    raise RuntimeError(
+                        f"BigQuery load failed for rows {start}-{end-1} after {max_retries} retries: {e}"
+                    ) from e
+                sleep_s = 2**attempt
+                print(
+                    f" BQ load error on rows {start}-{end-1}: {e} -> retrying in {sleep_s}s"
+                )
+                time.sleep(sleep_s)
+
+    print(f"-> Successfully loaded {total} records into BigQuery.")
+
+
+# def load_data(enriched_data: List[Dict[str, Any]]):
+#     """Writes data to BigQuery and ElasticSearch"""
+
+#     # BQ write
+#     table_id = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
+#     try:
+#         # BQ insert_rows_json expects python dictionaries
+#         errors = BQ_CLIENT.insert_rows_json(table_id, enriched_data)
+#         if errors:
+#             print(f"WARNING: Errors occurred inserting data into BQ: {errors}")
+#         else:
+#             print(
+#                 f"-> Successfully loaded {len(enriched_data)} records into BigQuery table {table_id}."
+#             )
+#     except Exception as e:
+#         print(f"FATAL ERROR during BQ Load: {e}")
+#         return
+
+#     # elastic Upsert
+#     try:
+#         # ELASTIC_CLIENT.bulk_upsert(enriched_data, index_name=settings.ELASTIC_INDEX_DOCTORS)
+#         print(
+#             f"-> Indexed {len(enriched_data)} records into ElasticSearch index {settings.ELASTIC_INDEX_DOCTORS} (Placeholder)."
+#         )
+#     except Exception as e:
+#         print(f"WARNING: Errors occurred during Elastic Upsert: {e}")
 
 
 def run_indexer_job():
     """Main function to run the entire ETL indexer process."""
     print("######### Starting Cloud Run Indexer ETL Job ##########")
-    TEST_LIMIT = 8
+    TEST_LIMIT = 200
     # Extract data from BQ
     raw_doctors = get_doctors_for_enrichment(limit=TEST_LIMIT)
     total_extracted = len(raw_doctors)
@@ -247,8 +326,6 @@ def run_indexer_job():
         print("Enrichment failed for all doctors. Exiting.")
         return
 
-    load_data(enriched_doctors)
-
     print("\n--- FINAL JOB SUMMARY ---")
     print(f"Total Records Extracted: {total_extracted}")
     print(f"Records Successfully Enriched: {successful_count}")
@@ -257,6 +334,17 @@ def run_indexer_job():
     print(f"Unprocessed doctors: {unprocessed_docs}=======")
     print(f"Unprocessed NPIs: {unprocessed_npis}======")
     print("@@@@@@@@@@@@ Indexer Job Completed Successfully @@@@@@@@@@")
+
+    payload_path = save_payload_jsonl(successful_doctors)
+
+    try:
+        load_data_to_bq(successful_doctors, batch_size=50, max_retries=4)
+    except Exception as e:
+        print(
+            f"FATAL: BigQuery load ultimately failed. You can resume upload from file:\n  python -m jobs.resume_upload '{payload_path}'"
+        )
+        print(f"Error: {e}")
+        return
 
 
 if __name__ == "__main__":
