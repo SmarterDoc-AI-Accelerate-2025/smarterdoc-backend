@@ -59,13 +59,14 @@ ElasticSearch: Accessible at `http://localhost:9200` (for debugging).
 
 ## Development Setup
 
-````bash
+```bash
 # Install production dependencies
 pip install -r requirements.txt
 
 # Install development dependencies (for local audio recording)
 pip install -r requirements-dev.txt
 ```
+
 ---
 
 ## NPI Data Extraction Tools
@@ -83,7 +84,7 @@ This repository also includes advanced tools for extracting healthcare provider 
 ```bash
 cd npi_tools
 python NPI_multilevel_shard.py "New York" "NY"
-````
+```
 
 **Results**: Successfully extracted 73,581+ NPI records for New York City (7x improvement over traditional methods)
 
