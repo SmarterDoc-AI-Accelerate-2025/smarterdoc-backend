@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # TODO: add search api key if using web-search for data enrichment
     GOOGLE_SEARCH_API_KEY: str | None = None
     GOOGLE_SEARCH_CSE_ID: str | None = None
-    GCP_MEDIA_BUCKET: str | None=None
+    # GCP_MEDIA_BUCKET: str | None=None
 
     ELASTIC_URL: str = "http://localhost:9200"
     ELASTIC_API_KEY: str | None = None
@@ -47,10 +47,10 @@ class Settings(BaseSettings):
     GENAI_TOP_P: float = 0.95
     GENAI_TOP_K: int = 40
     GENAI_MAX_OUTPUT_TOKENS: int = 8192
-    
+
     # Safety Settings
     GENAI_SAFETY_THRESHOLD: str = "BLOCK_MEDIUM_AND_ABOVE"
-    
+
     # ============================================
     # Speech-to-Text Configuration
     # ============================================
@@ -59,10 +59,10 @@ class Settings(BaseSettings):
     SPEECH_LANGUAGE_CODE: str = "en-US"
     SPEECH_ENCODING: str = "LINEAR16"
     SPEECH_MODEL: str = "default"
-    
+
     # Enable automatic punctuation
     SPEECH_ENABLE_AUTOMATIC_PUNCTUATION: bool = True
-    
+
     # Single utterance mode (stop after detecting end of speech)
     SPEECH_SINGLE_UTTERANCE: bool = False
 

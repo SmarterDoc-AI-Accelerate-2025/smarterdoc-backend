@@ -1,6 +1,8 @@
 import math
 from ..models.schemas import RankRequest, DoctorHit
 from .elastic_client import fetch_evidence_ids
+from ..util.med_schools import top_tier1_med_schools, top_tier2_meds_schools, top_tier3_med_schools
+from ..util.hospitals import us_tier1_specialty_hospitals, us_tier2_specialty_hospitals, us_tier3_specialty_hospitals
 
 WEIGHTS = {
     "specialty_match": 30.0,
@@ -8,7 +10,9 @@ WEIGHTS = {
     "experience": 20.0,
     "reputation": 15.0,
     "pub_recent": 10.0,
-    "distance": 10.0
+    "certification": 12.0,
+    "affiliated_hospitals": 15.0,
+    "education": 8.0
 }
 
 
@@ -33,7 +37,6 @@ def rank_candidates(req: RankRequest, es=None) -> list[DoctorHit]:
         pub = min(10.0, (d.factors or {}).get("pub_recent", 0.0)) / 10.0
         years = (d.factors or {}).get("years_experience", 8)
         exp = math.log1p(years) / math.log(21)
-        dist = distance_score(d.distance_km)
         rep = (d.reputation_proxy or 0.0) / 15.0
 
         breakdown = {
@@ -41,8 +44,11 @@ def rank_candidates(req: RankRequest, es=None) -> list[DoctorHit]:
             "insurance": WEIGHTS["insurance"] * ins,
             "pub_recent": WEIGHTS["pub_recent"] * pub,
             "experience": WEIGHTS["experience"] * exp,
-            "distance": WEIGHTS["distance"] * dist,
+            "certificaton": WEIGHTS["certification"],  # help me complete this 
             "reputation": WEIGHTS["reputation"] * rep,
+            "affiliated_hospital":
+            WEIGHTS["affiliated_hospitals"],  # help me complete this
+            "education": WEIGHTS["education"]  #help me complete this
         }
         total = sum(breakdown.values())
         d.factors = (d.factors or {}) | breakdown | {"total": total}
