@@ -7,19 +7,10 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env 
-    depends_on:
-      - elastic
-    restart: unless-stopped
-
-  # For development
-  elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
-    container_name: elastic-local
+      - .env
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "9200:9200"
+      - GOOGLE_APPLICATION_CREDENTIALS=sa-key.json
+    volumes:
+      - .:/app
+      - ./keys:/app/keys:ro
     restart: unless-stopped

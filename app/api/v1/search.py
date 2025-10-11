@@ -1,16 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ...models.schemas import (
-    SearchRequest, 
-    SearchResponse, 
-    FrontendSearchRequest, 
-    FrontendSearchResponse,
-    VoiceSearchRequest
-)
+from ...models.schemas import (SearchRequest, SearchResponse,
+                               FrontendSearchRequest, FrontendSearchResponse,
+                               VoiceSearchRequest)
 from ...services.elastic_client import hybrid_search
 from ...deps import get_elastic
 from ...services.mock_doctor_service import mock_doctor_service
+from app.services.bq_doctor_service import bq_doctor_service
 
 router = APIRouter()
+
 
 @router.post("", response_model=SearchResponse)
 def search(req: SearchRequest, es=Depends(get_elastic)):
@@ -23,24 +21,29 @@ def search(req: SearchRequest, es=Depends(get_elastic)):
     except Exception as e:
         # Log the error for debugging
         print(f"Error in hybrid_search: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Search service error: {str(e)}")
+        raise HTTPException(status_code=500,
+                            detail=f"Search service error: {str(e)}")
+
 
 @router.post("/doctors", response_model=FrontendSearchResponse)
 def search_doctors(req: FrontendSearchRequest):
     """
-    Mock search doctors endpoint for frontend integration
-    Now at /v1/search/doctors
+    Real-time doctor search from BigQuery.
+    Filters: specialty, years_experience, certification.
     """
     try:
-        doctors = mock_doctor_service.search_doctors(req)
-        
-        return FrontendSearchResponse(
-            doctors=doctors,
-            search_query=req.query,
-            total_results=len(doctors)
-        )
+        doctors = bq_doctor_service.search_doctors(
+            specialty=req.specialty,
+            min_experience=req.min_experience,
+            has_certification=req.has_certification,
+            limit=req.limit or 30)
+        return FrontendSearchResponse(doctors=doctors,
+                                      total_results=len(doctors),
+                                      search_query=req.specialty)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        print("BQ search error:", e)
+        raise HTTPException(status_code=500, detail="Doctor search failed.")
+
 
 @router.post("/voice", response_model=FrontendSearchResponse)
 def voice_search(req: VoiceSearchRequest):
@@ -50,11 +53,10 @@ def voice_search(req: VoiceSearchRequest):
     """
     try:
         doctors = mock_doctor_service.voice_search_doctors(req.voice_query)
-        
-        return FrontendSearchResponse(
-            doctors=doctors,
-            search_query=req.voice_query,
-            total_results=len(doctors)
-        )
+
+        return FrontendSearchResponse(doctors=doctors,
+                                      search_query=req.voice_query,
+                                      total_results=len(doctors))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Voice search failed: {str(e)}")
+        raise HTTPException(status_code=500,
+                            detail=f"Voice search failed: {str(e)}")

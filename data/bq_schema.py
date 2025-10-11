@@ -58,15 +58,30 @@ def get_profiles_schema() -> List[SchemaField]:
                     "STRING",
                     mode="REPEATED",
                     description="Titles of key research papers."),
-        SchemaField("education",
-                    "STRING",
-                    mode="REPEATED",
-                    description="List of universities/residencies attended."),
+        SchemaField(
+            "education",
+            "STRING",
+            mode="REPEATED",
+            description="List of medical school(s)/residency attended."),
         SchemaField("hospitals",
                     "STRING",
                     mode="REPEATED",
                     description="List of hospitals/clinics affiliated with."),
-
+        SchemaField(
+            "certifications",
+            "STRING",
+            mode="REPEATED",
+            description="List of board certifications the doctor holds."),
+        SchemaField(
+            "latitude",
+            "FLOAT64",
+            description=
+            "Decimal latitude coordinate of the primary practice location."),
+        SchemaField(
+            "longitude",
+            "FLOAT64",
+            description=
+            "Decimal longitude coordinate of the primary practice location."),
         # Array of Records for Ratings (to preserve source granularity)
         SchemaField(
             "ratings",
