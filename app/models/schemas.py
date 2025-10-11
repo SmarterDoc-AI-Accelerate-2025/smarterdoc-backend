@@ -146,6 +146,7 @@ class DoctorOut(BaseModel):
     ratings: Optional[List[RatingRecord]] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    address: Optional[str] = None
 
     profile_picture_url: Optional[str] = None
 

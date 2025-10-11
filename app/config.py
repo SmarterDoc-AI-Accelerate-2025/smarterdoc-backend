@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     BQ_PROJECT: str | None = None
     BQ_CURATED_DATASET: str = "curated"
     COST_TABLE: str | None = None
-
+    BQ_GEO_CACHE_TABLE: str | None = None
+    BQ_GEO_INPUT_TABLE: str | None = None
     BQ_RAW_DATASET: str = "gcs_npi_staging"
     BQ_RAW_TABLE: str = "npi_doctors_row"
     BQ_PROFILES_TABLE: str = "doctor_profiles"
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     # TODO: add search api key if using web-search for data enrichment
     GOOGLE_SEARCH_API_KEY: str | None = None
     GOOGLE_SEARCH_CSE_ID: str | None = None
+    MAPS_API_KEY: str | None = None
     # GCP_MEDIA_BUCKET: str | None=None
 
     ELASTIC_URL: str = "http://localhost:9200"
