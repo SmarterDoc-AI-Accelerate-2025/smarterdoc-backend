@@ -118,6 +118,60 @@ class BookResponse(BaseModel):
 
 
 # ============================================
+# Frontend Schemas
+# ============================================
+
+
+# New schemas for frontend integration
+class FrontendSearchRequest(BaseModel):
+    specialty: Optional[str] = None
+    min_experience: Optional[int] = None
+    has_certification: Optional[bool] = False
+    limit: Optional[int] = 30
+
+
+# Frontend Response
+class DoctorOut(BaseModel):
+    npi: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    primary_specialty: Optional[str]
+    years_experience: Optional[int]
+    bio: Optional[str] = None
+    testimonial_summary_text: Optional[str] = None
+    publications: Optional[List[str]] = None
+    certifications: Optional[List[str]] = None
+    education: Optional[List[str]] = None
+    hospitals: Optional[List[str]] = None
+    ratings: Optional[List[RatingRecord]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    profile_picture_url: Optional[str] = None
+
+
+class FrontendSearchResponse(BaseModel):
+    search_query: Optional[str]
+    total_results: int
+    doctors: List[DoctorOut]
+
+
+# TODO: for mock data, may remove, see DoctorOut() for response schema
+class FrontendDoctor(BaseModel):
+    id: int
+    name: str
+    specialty: str
+    rating: float
+    reviews: int
+    address: str
+    lat: float
+    lng: float
+    time: str
+    img: str = "/doctor.png"
+    insurance_accepted: Optional[List[str]] = None
+
+
+# ============================================
 # AI Chat Schemas
 # ============================================
 
@@ -217,46 +271,6 @@ class SpeechTranscriptionResult(BaseModel):
         default=None, description="Confidence score (0-1) for final results")
     stability: Optional[float] = Field(
         default=None, description="Stability score (0-1) for interim results")
-
-
-# New schemas for frontend integration
-class FrontendSearchRequest(BaseModel):
-    specialty: Optional[str] = None
-    min_experience: Optional[int] = None
-    has_certification: Optional[bool] = False
-    limit: Optional[int] = 30
-
-
-class DoctorOut(BaseModel):
-    npi: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    primary_specialty: Optional[str]
-    years_experience: Optional[int]
-    certifications: Optional[List[str]]
-    hospitals: Optional[List[str]]
-    profile_picture_url: Optional[str]
-
-
-class FrontendSearchResponse(BaseModel):
-    search_query: Optional[str]
-    total_results: int
-    doctors: List[DoctorOut]
-
-
-# TODO: for mock data, may remove
-class FrontendDoctor(BaseModel):
-    id: int
-    name: str
-    specialty: str
-    rating: float
-    reviews: int
-    address: str
-    lat: float
-    lng: float
-    time: str
-    img: str = "/doctor.png"
-    insurance_accepted: Optional[List[str]] = None
 
 
 class VoiceSearchRequest(BaseModel):

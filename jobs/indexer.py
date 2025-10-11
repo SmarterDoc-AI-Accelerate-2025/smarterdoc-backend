@@ -190,7 +190,8 @@ async def enrich_single_doctor(
         "years_experience": extracted_dict.get('years_experience'),
         "testimonial_summary_text":
         extracted_dict.get('testimonial_summary_text'),
-        "profile_picture_url": None,
+        "profile_picture_url":
+        'https://storage.googleapis.com/smarterdoc-profile-media-bucket/headshots/12345.png',
         "latitude": extracted_dict.get('latitude'),
         "longitude": extracted_dict.get('longitude'),
         "education": extracted_dict.get('education', []),

@@ -1,22 +1,25 @@
 from google.cloud import bigquery
+import json
 from app.config import settings
+from google.auth import default
 
 
 class BQDoctorService:
 
     def __init__(self):
-        self.client = bigquery.Client(project=settings.GCP_PROJECT_ID)
+        credentials, project = default()
+        self.client = bigquery.Client(project=project
+                                      or settings.GCP_PROJECT_ID,
+                                      credentials=credentials)
         self.table = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
 
     def _ensure_list(self, v):
-        # BigQuery may store these as STRING (JSON/text) or ARRAY<STRING>.
         if v is None:
             return []
         if isinstance(v, list):
             return v
-        # Try to parse JSON array string; else wrap as single-item list
+        # Some columns may be stored as STRING containing JSON arrays — handle both
         try:
-            import json
             parsed = json.loads(v)
             return parsed if isinstance(parsed, list) else [str(v)]
         except Exception:
@@ -42,24 +45,48 @@ class BQDoctorService:
         query = f"""
         SELECT
           CAST(npi AS STRING) AS npi,
-          first_name, last_name, primary_specialty,
+          first_name, last_name,
+          primary_specialty,
           SAFE_CAST(years_experience AS INT64) AS years_experience,
-          certifications, hospitals, profile_picture_url
+          -- NEW fields
+          bio AS bio,                                     -- TEXT
+          testimonial_summary_text,                       -- TEXT
+          publications,                                   -- ARRAY<STRING> or STRING(JSON)
+          certifications,                                 -- ARRAY<STRING>
+          education,                                      -- ARRAY<STRING> or STRING(JSON)
+          hospitals,                                      -- ARRAY<STRING> or STRING(JSON)
+          ratings,                                        -- ARRAY<STRUCT> or STRING(JSON) (depends on your schema)
+          SAFE_CAST(latitude  AS FLOAT64) AS latitude,
+          SAFE_CAST(longitude AS FLOAT64) AS longitude,
+          profile_picture_url
         FROM `{self.table}`
         WHERE {where_clause}
         ORDER BY years_experience DESC NULLS LAST
         LIMIT {int(limit)}
         """
+
         rows = list(self.client.query(query))
-        results = []
+        out = []
         for r in rows:
             d = dict(r)
-            # Normalize types for Pydantic
-            d["npi"] = str(d.get("npi")) if d.get("npi") is not None else None
+
+            # Normalize types that might be STRING(JSON) in some rows
+            d["publications"] = self._ensure_list(d.get("publications"))
             d["certifications"] = self._ensure_list(d.get("certifications"))
+            d["education"] = self._ensure_list(d.get("education"))
             d["hospitals"] = self._ensure_list(d.get("hospitals"))
-            results.append(d)
-        return results
+
+            # If ratings is stored as JSON string, convert to dicts; otherwise pass-through
+            ratings = d.get("ratings")
+            if isinstance(ratings, str):
+                try:
+                    ratings = json.loads(ratings)
+                except Exception:
+                    ratings = []
+            d["ratings"] = ratings or []
+
+            out.append(d)
+        return out
 
 
 bq_doctor_service = BQDoctorService()
