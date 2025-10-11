@@ -5,7 +5,8 @@ npi_doctors_*.json
 *_unlimited.json
 media_tools/headshots
 headshots/
-
+app/media_tools/
+out/
 
 # Python
 __pycache__/
