@@ -67,11 +67,11 @@ class EnrichedProfileData(BaseModel):
     )
     top_education: List[str] = Field(
         description=
-        "A list of 1-3 prominent medical schools, universities, or residencies attended."
+        "A list of 1-3 prominent medical schools/universities/residencies attended."
     )
     top_hospitals: List[str] = Field(
         description=
-        "A list of 1-3 major hospitals or clinics where the doctor holds current privileges or works."
+        "A list of 1-4 major hospitals or clinics where the doctor holds current privileges or works."
     )
     latitude: float = Field(
         description=
@@ -121,78 +121,67 @@ class BookResponse(BaseModel):
 # AI Chat Schemas
 # ============================================
 
+
 class ChatMessage(BaseModel):
     """Single chat message."""
-    role: str = Field(..., description="Role of the message sender (user/model)")
+    role: str = Field(...,
+                      description="Role of the message sender (user/model)")
     content: str = Field(..., description="Content of the message")
 
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
-    message: str = Field(..., description="User message to send to the AI", min_length=1)
+    message: str = Field(...,
+                         description="User message to send to the AI",
+                         min_length=1)
     history: Optional[List[ChatMessage]] = Field(
-        default=None, 
-        description="Previous conversation history"
-    )
+        default=None, description="Previous conversation history")
     model: Optional[str] = Field(
-        default=None, 
-        description="Model to use for generation (e.g., gemini-2.0-flash-001)"
-    )
+        default=None,
+        description="Model to use for generation (e.g., gemini-2.0-flash-001)")
     temperature: Optional[float] = Field(
-        default=None, 
-        ge=0.0, 
-        le=2.0, 
-        description="Controls randomness in generation"
-    )
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Controls randomness in generation")
     max_tokens: Optional[int] = Field(
-        default=None, 
-        gt=0, 
-        description="Maximum number of tokens to generate"
-    )
+        default=None, gt=0, description="Maximum number of tokens to generate")
     system_instruction: Optional[str] = Field(
         default=None,
-        description="System instruction to guide the model's behavior"
-    )
+        description="System instruction to guide the model's behavior")
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
     model_config = ConfigDict(protected_namespaces=())
-    
+
     message: str = Field(..., description="AI-generated response")
     role: str = Field(default="model", description="Role of the responder")
     model_used: str = Field(..., description="Model used for generation")
-    usage: Optional[Dict[str, Any]] = Field(
-        default=None, 
-        description="Token usage information"
-    )
+    usage: Optional[Dict[str,
+                         Any]] = Field(default=None,
+                                       description="Token usage information")
     finish_reason: Optional[str] = Field(
-        default=None,
-        description="Reason why generation finished"
-    )
+        default=None, description="Reason why generation finished")
 
 
 class ChatStreamRequest(BaseModel):
     """Request model for streaming chat endpoint."""
-    message: str = Field(..., description="User message to send to the AI", min_length=1)
+    message: str = Field(...,
+                         description="User message to send to the AI",
+                         min_length=1)
     history: Optional[List[ChatMessage]] = Field(
-        default=None, 
-        description="Previous conversation history"
-    )
-    model: Optional[str] = Field(
-        default=None, 
-        description="Model to use for generation"
-    )
+        default=None, description="Previous conversation history")
+    model: Optional[str] = Field(default=None,
+                                 description="Model to use for generation")
     temperature: Optional[float] = Field(
-        default=None, 
-        ge=0.0, 
-        le=2.0, 
-        description="Controls randomness in generation"
-    )
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Controls randomness in generation")
     system_instruction: Optional[str] = Field(
         default=None,
-        description="System instruction to guide the model's behavior"
-    )
+        description="System instruction to guide the model's behavior")
 
 
 class HealthCheckResponse(BaseModel):
@@ -206,47 +195,56 @@ class HealthCheckResponse(BaseModel):
 # Speech-to-Text Schemas
 # ============================================
 
+
 class SpeechStreamRequest(BaseModel):
     """Request model for streaming speech transcription."""
     language_code: Optional[str] = Field(
-        default=None,
-        description="Language code (e.g., 'en-US', 'zh-CN')"
-    )
+        default=None, description="Language code (e.g., 'en-US', 'zh-CN')")
     single_utterance: Optional[bool] = Field(
-        default=None,
-        description="Stop listening after single utterance"
-    )
+        default=None, description="Stop listening after single utterance")
     duration_seconds: Optional[int] = Field(
         default=None,
         gt=0,
-        description="Maximum recording duration in seconds"
-    )
+        description="Maximum recording duration in seconds")
 
 
 class SpeechTranscriptionResult(BaseModel):
     """Result model for speech transcription."""
     transcript: str = Field(..., description="Transcribed text")
     is_final: Optional[bool] = Field(
-        default=None,
-        description="Whether this is a final result"
-    )
+        default=None, description="Whether this is a final result")
     confidence: Optional[float] = Field(
-        default=None,
-        description="Confidence score (0-1) for final results"
-    )
+        default=None, description="Confidence score (0-1) for final results")
     stability: Optional[float] = Field(
-        default=None,
-        description="Stability score (0-1) for interim results"
-    )
+        default=None, description="Stability score (0-1) for interim results")
 
 
 # New schemas for frontend integration
 class FrontendSearchRequest(BaseModel):
-    query: Optional[str] = None
-    location: Optional[str] = None
-    insurance: Optional[str] = None
+    specialty: Optional[str] = None
+    min_experience: Optional[int] = None
+    has_certification: Optional[bool] = False
+    limit: Optional[int] = 30
 
 
+class DoctorOut(BaseModel):
+    npi: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    primary_specialty: Optional[str]
+    years_experience: Optional[int]
+    certifications: Optional[List[str]]
+    hospitals: Optional[List[str]]
+    profile_picture_url: Optional[str]
+
+
+class FrontendSearchResponse(BaseModel):
+    search_query: Optional[str]
+    total_results: int
+    doctors: List[DoctorOut]
+
+
+# TODO: for mock data, may remove
 class FrontendDoctor(BaseModel):
     id: int
     name: str
@@ -259,12 +257,6 @@ class FrontendDoctor(BaseModel):
     time: str
     img: str = "/doctor.png"
     insurance_accepted: Optional[List[str]] = None
-
-
-class FrontendSearchResponse(BaseModel):
-    doctors: List[FrontendDoctor]
-    search_query: Optional[str] = None
-    total_results: int
 
 
 class VoiceSearchRequest(BaseModel):

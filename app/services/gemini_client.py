@@ -23,15 +23,12 @@ class RatingRecord(BaseModel):
     link: str = Field(description="URL to the original review page.")
 
 
-class EnrichedProfileData(BaseModel):
+class ApiEnrichedProfileData(BaseModel):
     """The final structured data object to be extracted by the LLM."""
     years_experience: int = Field(
         description=
         "Total years of clinical practice since residency/fellowship completion, calculated by LLM."
     )
-    profile_picture_url: str = Field(
-        description=
-        "Public URL found for the doctor's portrait or profile image.")
     bio_text_consolidated: str = Field(
         description=
         "Comprehensive biographical paragraph summarizing the doctor's experience, education, and special interests."
@@ -54,6 +51,11 @@ class EnrichedProfileData(BaseModel):
     longitude: float = Field(
         description=
         "The decimal longitude coordinate of the primary practice location.")
+    education: List[str] = Field(
+        description="Medical schools, residencies, fellowships.")
+    hospitals: List[str] = Field(
+        description="Current hospital or clinical affiliations.")
+    certifications: List[str] = Field(description="Board certifications.")
 
 
 def _clean_llm_artifacts(text: str) -> str:
@@ -123,7 +125,7 @@ class GeminiClient:
         if not unstructured_text:
             return {}
 
-        schema = EnrichedProfileData.model_json_schema()
+        schema = ApiEnrichedProfileData.model_json_schema()
 
         system_instruction = (
             "You are an expert medical data extractor. Your task is to analyze the "
@@ -159,7 +161,7 @@ class GeminiClient:
 
         try:
             # Validate and convert the JSON string to a Python dictionary
-            extracted_dict = EnrichedProfileData.model_validate_json(
+            extracted_dict = ApiEnrichedProfileData.model_validate_json(
                 json_str).model_dump()
             return extracted_dict
         except Exception as e:
@@ -176,7 +178,7 @@ class GeminiClient:
         and return structured results PLUS the grounding sources.
         """
 
-        schema = EnrichedProfileData.model_json_schema()
+        schema = ApiEnrichedProfileData.model_json_schema()
         empty_result = {}, []
 
         config = types.GenerateContentConfig(
@@ -213,7 +215,7 @@ class GeminiClient:
         json_str = _clean_llm_artifacts(json_str)
 
         try:
-            extracted_dict = EnrichedProfileData.model_validate_json(
+            extracted_dict = ApiEnrichedProfileData.model_validate_json(
                 json_str).model_dump()
 
             extracted_dict['bio_text_consolidated'] = _clean_llm_artifacts(
