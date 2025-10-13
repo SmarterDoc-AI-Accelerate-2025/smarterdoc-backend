@@ -20,7 +20,7 @@ google-cloud-speech==2.28.0
 # Audio processing
 numpy>=1.24.0
 scipy>=1.10.0
-audioop-lts>=0.2.1  # audioop replacement for Python 3.13+
+#audioop-lts>=0.2.1  # audioop replacement for Python 3.13+
 
 # Twilio
 twilio>=8.0.0
