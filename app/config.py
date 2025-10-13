@@ -68,9 +68,21 @@ class Settings(BaseSettings):
     # Single utterance mode (stop after detecting end of speech)
     SPEECH_SINGLE_UTTERANCE: bool = False
 
-    # TWILIO_ACCOUNT_SID: str | None = None
-    # TWILIO_AUTH_TOKEN: str | None = None
-    # TWILIO_CALLER_NUMBER: str | None = None
+    # ============================================
+    # Twilio Configuration
+    # ============================================
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_NUMBER: str | None = None
+    
+    # ============================================
+    # Vertex AI Live API Configuration
+    # ============================================
+    # Live API 支持的模型：models/gemini-2.0-flash-exp 或 models/gemini-1.5-flash
+    VERTEX_LIVE_MODEL: str = "models/gemini-2.0-flash-live-preview-04-09"  # Live API 专用模型
+    VERTEX_LIVE_VOICE: str = "Puck"  # 可选: Puck, Charon, Kore, Fenrir, Aoede
+    VERTEX_LIVE_SYSTEM_INSTRUCTION: str = "You are a helpful medical assistant. Keep responses concise and natural."
+    VERTEX_LIVE_INITIAL_MESSAGE: str = "Hello! How can I help you today?"  # AI主动说的第一句话
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
