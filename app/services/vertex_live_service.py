@@ -3,7 +3,7 @@ Vertex AI Live API service for real-time voice conversations.
 Handles bidirectional audio streaming with Gemini Live models.
 """
 import asyncio
-from typing import AsyncIterator, Optional, Callable
+from typing import AsyncIterator, Optional, Callable, List
 from google import genai
 from google.genai.types import (
     LiveConnectConfig, 
@@ -14,6 +14,8 @@ from google.genai.types import (
     Tool,
     LiveClientRealtimeInput,
     Blob,
+    Content,
+    Part,
 )
 
 from app.config import settings
@@ -93,6 +95,15 @@ class VertexLiveSession:
             "speech_config": speech_config,
         }
         
+        # Add system instruction if provided
+        if self.system_instruction:
+            # System instruction needs to be a Content object, not a plain string
+            config_params["system_instruction"] = Content(
+                parts=[Part(text=self.system_instruction)],
+                role="system"
+            )
+            logger.info(f"System instruction configured: {self.system_instruction[:100]}...")
+        
         # Add generation config if available
         if generation_config:
             config_params["generation_config"] = generation_config
@@ -101,7 +112,6 @@ class VertexLiveSession:
         if self.tools:
             config_params["tools"] = self.tools
         
-        # Note: system_instruction is passed separately in send() method, not in config
         return LiveConnectConfig(**config_params)
     
     async def connect(self):
@@ -177,7 +187,9 @@ class VertexLiveSession:
             raise RuntimeError("Session not connected. Call connect() first.")
         
         try:
+            # Send text message (for system messages or debugging)
             await self.session.send(input=text)
+            logger.debug(f"Sent text: {text[:50]}...")
         except Exception as e:
             logger.error(f"Error sending text to Vertex Live API: {e}")
             raise
@@ -202,25 +214,50 @@ class VertexLiveSession:
                 timeout=timeout
             )
             
+            # Debug: Log the message structure
+            logger.debug(f"Received message type: {type(message)}")
+            logger.debug(f"Message attributes: {dir(message)}")
+            
             # Extract audio from the response
             server_content = getattr(message, "server_content", None)
             if not server_content:
+                logger.debug("No server_content in message")
                 return None
             
+            logger.debug(f"server_content type: {type(server_content)}")
+            
             model_turn = getattr(server_content, "model_turn", None)
-            if not model_turn or not model_turn.parts:
+            if not model_turn:
+                logger.debug("No model_turn in server_content")
                 return None
+            
+            if not model_turn.parts:
+                logger.debug("No parts in model_turn")
+                return None
+            
+            logger.debug(f"Found {len(model_turn.parts)} parts in model_turn")
             
             # Collect all audio parts
             audio_chunks = []
-            for part in model_turn.parts:
-                if part.inline_data and part.inline_data.mime_type.startswith("audio/pcm"):
-                    audio_chunks.append(part.inline_data.data)
+            for i, part in enumerate(model_turn.parts):
+                logger.debug(f"Part {i}: has inline_data={hasattr(part, 'inline_data')}")
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    mime_type = part.inline_data.mime_type if hasattr(part.inline_data, 'mime_type') else 'unknown'
+                    logger.debug(f"Part {i} mime_type: {mime_type}")
+                    if mime_type.startswith("audio/pcm"):
+                        data_len = len(part.inline_data.data) if hasattr(part.inline_data, 'data') else 0
+                        logger.debug(f"Part {i} audio data length: {data_len}")
+                        audio_chunks.append(part.inline_data.data)
+                elif hasattr(part, 'text'):
+                    logger.debug(f"Part {i} has text: {part.text[:100] if part.text else 'empty'}")
             
             if audio_chunks:
                 # Combine all audio chunks
                 combined_audio = b''.join(audio_chunks)
+                logger.info(f"✓ Received audio: {len(combined_audio)} bytes")
                 return combined_audio
+            else:
+                logger.debug("No audio chunks found in parts")
             
             return None
             
@@ -228,7 +265,7 @@ class VertexLiveSession:
             # No data available within timeout
             return None
         except Exception as e:
-            logger.error(f"Error receiving audio from Vertex Live API: {e}")
+            logger.error(f"Error receiving audio from Vertex Live API: {e}", exc_info=True)
             return None
     
     async def stream_conversation(
