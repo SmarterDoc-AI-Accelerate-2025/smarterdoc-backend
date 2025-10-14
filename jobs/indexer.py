@@ -133,7 +133,7 @@ async def enrich_single_doctor(
     Use Google Search as your tool. Calculate years of experience from their graduation or residency end date."""
         )
 
-        # The grounding client returns a Tuple: (extracted_dict, sources_list)
+        # Grounding client returns a Tuple: (extracted_dict, sources_list)
         result_tuple = GEMINI_CLIENT.extract_structured_data_with_grounding(
             prompt_instruction=prompt)
 
