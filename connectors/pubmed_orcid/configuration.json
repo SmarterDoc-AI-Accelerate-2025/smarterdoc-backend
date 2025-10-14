@@ -1,0 +1,30 @@
+{
+  "api_base": "https://npiregistry.cms.hhs.gov/api/",
+  "page_size": 200,
+  "request_timeout_seconds": 30,
+  "request_backoff_seconds": 0.25,
+  "max_pages_per_sync": 10,
+
+  "nyc_zip_prefixes": [
+    "100",
+    "101",
+    "102",
+    "103",
+    "104",
+    "111",
+    "112",
+    "113",
+    "114",
+    "116"
+  ],
+  "taxonomy_descriptions": [
+    "Reproductive Endocrinology",
+    "Orthopaedic Surgery"
+  ],
+
+  "email": "your_email@example.com",
+  "ncbi_api_key": null,
+  "max_articles_per_doctor": 25,
+  "max_doctors_per_sync": 150,
+  "use_location_filter": false
+}
