@@ -32,7 +32,6 @@ class CallRequest(BaseModel):
     twiml_url: str | None = Field(None, description="Custom TwiML URL (optional)")
     voice: str | None = Field(None, description="Vertex AI voice name (optional)")
     system_instruction: str | None = Field(None, description="Custom system instruction (optional)")
-    initial_message: str | None = Field(None, description="Initial message AI will say first (optional)")
 
 
 class CallResponse(BaseModel):
@@ -127,10 +126,6 @@ async def initiate_call(request: Request, call_request: CallRequest):
                 # URL encode the system instruction
                 from urllib.parse import quote
                 params.append(f"instruction={quote(call_request.system_instruction)}")
-            if call_request.initial_message:
-                # URL encode the initial message
-                from urllib.parse import quote
-                params.append(f"initial_message={quote(call_request.initial_message)}")
             
             if params:
                 twiml_url += "?" + "&".join(params)
@@ -203,8 +198,7 @@ async def hangup_call(call_sid: str):
 async def get_twiml(
     request: Request, 
     voice: str | None = None, 
-    instruction: str | None = None,
-    initial_message: str | None = None
+    instruction: str | None = None
 ):
     """
     Generate TwiML for Twilio to connect the call to our WebSocket.
@@ -212,7 +206,6 @@ async def get_twiml(
     Query parameters:
     - voice: Optional Vertex AI voice name
     - instruction: Optional system instruction (URL-encoded)
-    - initial_message: Optional initial message AI will say first (URL-encoded)
     """
     try:
         # Get host from request
@@ -233,8 +226,6 @@ async def get_twiml(
             params.append(f"voice={voice}")
         if instruction:
             params.append(f"instruction={instruction}")
-        if initial_message:
-            params.append(f"initial_message={initial_message}")
         
         if params:
             ws_url += "?" + "&".join(params)
@@ -260,8 +251,7 @@ async def get_twiml(
 async def twilio_stream_websocket(
     websocket: WebSocket,
     voice: str | None = None,
-    instruction: str | None = None,
-    initial_message: str | None = None,
+    instruction: str | None = None
 ):
     """
     WebSocket endpoint for Twilio Media Streams.
@@ -270,9 +260,8 @@ async def twilio_stream_websocket(
     Query parameters:
     - voice: Optional Vertex AI voice name
     - instruction: Optional system instruction
-    - initial_message: Optional initial message AI will say first
     """
-    logger.info(f"WebSocket connection attempt - Voice: {voice}, Instruction: {instruction}, Initial: {initial_message}")
+    logger.info(f"WebSocket connection attempt - Voice: {voice}, Instruction: {instruction}")
     await websocket.accept()
     logger.info("✓ WebSocket connection accepted from Twilio")
     
@@ -300,17 +289,18 @@ async def twilio_stream_websocket(
                     stream_sid = message["start"]["streamSid"]
                     call_sid = message["start"]["callSid"]
                     
-                    logger.info(f"Stream started - StreamSID: {stream_sid}, CallSID: {call_sid}")
+                    logger.info(f"📞 Stream started - StreamSID: {stream_sid}, CallSID: {call_sid}")
                     logger.info("🤖 Starting Vertex Live AI session...")
                     
                     # Create Vertex Live session
                     system_instruction_text = instruction or settings.VERTEX_LIVE_SYSTEM_INSTRUCTION
                     voice_name = voice or settings.VERTEX_LIVE_VOICE
                     
+                    # Create Vertex Live session with system instruction
                     vertex_session = vertex_service.create_session(
                         session_id=stream_sid,
                         voice=voice_name,
-                        system_instruction=None,  # Will be sent after connection
+                        system_instruction=system_instruction_text,
                     )
                     
                     # Create media stream handler
@@ -319,38 +309,36 @@ async def twilio_stream_websocket(
                         vertex_session=vertex_session,
                     )
                     
-                    # Start the handler (connects to Vertex Live)
+                    # Start the handler (connects to Vertex Live) - this must complete before processing audio
+                    logger.info("🔄 Connecting to Vertex AI...")
                     await media_handler.start()
                     
-                    # Send system instruction and initial greeting
-                    if system_instruction_text:
-                        await vertex_session.send_text(system_instruction_text)
+                    # Small delay to ensure everything is fully initialized
+                    await asyncio.sleep(0.1)
                     
-                    # Send initial message (custom or default from settings)
-                    initial_msg = initial_message or settings.VERTEX_LIVE_INITIAL_MESSAGE
-                    if initial_msg:
-                        logger.info(f"Sending initial message: {initial_msg}")
-                        await vertex_session.send_text(initial_msg)
+                    logger.info(f"✅ Session ready! System instruction: {system_instruction_text[:80]}...")
+                    logger.info("🎙️ Ready to receive audio from user")
                     
                 elif event == "media":
                     # Audio data from Twilio
+                    if not media_handler or not media_handler.is_active:
+                        # Handler not ready yet, skip this audio chunk silently
+                        # (This is normal during startup)
+                        continue
+                    
                     payload = message["media"]["payload"]
                     logger.debug(f"Received media: {len(payload)} chars")
                     
                     # Process audio through Vertex Live API
-                    if media_handler and media_handler.is_active:
-                        # Process audio and get response
-                        response_audio = await media_handler.process_twilio_audio(payload)
-                        
-                        # Send response back to Twilio if available
-                        if response_audio:
-                            logger.debug(f"Sending back: {len(response_audio)} bytes")
-                            response_message = media_handler.format_twilio_media_message(response_audio)
-                            await websocket.send_text(json.dumps(response_message))
-                        else:
-                            logger.debug("No response audio from AI")
+                    response_audio = await media_handler.process_twilio_audio(payload)
+                    
+                    # Send response back to Twilio if available
+                    if response_audio:
+                        logger.debug(f"Sending back: {len(response_audio)} bytes")
+                        response_message = media_handler.format_twilio_media_message(response_audio)
+                        await websocket.send_text(json.dumps(response_message))
                     else:
-                        logger.warning("Media received but handler not ready")
+                        logger.debug("No response audio from AI")
                 
                 elif event == "mark":
                     # Mark event (can be used for timing/synchronization)
