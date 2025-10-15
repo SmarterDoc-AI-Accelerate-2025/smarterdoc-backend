@@ -91,3 +91,23 @@ class BQDoctorService:
 
             out.append(d)
         return out
+
+    def get_all_specialties(self):
+        """
+        Query BigQuery to get all distinct specialties from the doctor profiles table.
+        Returns a sorted list of unique specialties where primary_specialty is not null.
+        """
+        query = f"""
+        SELECT DISTINCT primary_specialty
+        FROM `{self.table}`
+        WHERE primary_specialty IS NOT NULL 
+          AND primary_specialty != ''
+        ORDER BY primary_specialty ASC
+        """
+        
+        job = self.client.query(query)
+        rows = list(job)
+        
+        # Extract specialty strings from rows
+        specialties = [row.primary_specialty for row in rows if row.primary_specialty]
+        return specialties
