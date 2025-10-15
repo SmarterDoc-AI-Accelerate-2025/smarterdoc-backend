@@ -1,3 +1,22 @@
+##############################################################
+# Fivetran Custom Connector SDK: Profiles Enrichment (Connector C)
+
+# Purpose:
+# This connector acts as a data consumer and producer. It pulls seed data (NPIs)
+# from the raw BigQuery tables loaded by Connectors A and B, executes LLM enrichment
+# (Gemini/Grounding) and embedding generation, and streams the final, enriched wide
+# table back to the destination.
+
+# Best Practices Implementation:
+# 1. Orchestration: Uses BigQuery as a source to target recently updated NPIs.
+# 2. Resilience: Robust try/except blocks around high-latency LLM/Embedding calls.
+# 3. Schema Management: Explicitly defines the complex ARRAY and JSON column types
+#    to guide Fivetran's schema creation in BigQuery.
+# 4. Consumption Control: Uses LIMIT clauses in BQ queries to manage Vertex AI spending
+#    and control sync runtime (Max Doctors per Sync).
+
+##############################################################
+
 import json
 import typing as t
 from datetime import datetime, timedelta, timezone
@@ -36,7 +55,7 @@ class ApiEnrichedProfileData(BaseModel):
     )
     bio_text_consolidated: str = Field(
         description=
-        "Comprehensive biographical paragraph summarizing the doctor's experience, education, and special interests."
+        "Comprehensive biographical paragraph summarizing the doctor's experience, education, and past/current medical focus."
     )
     publications: List[str] = Field(
         description=
@@ -50,6 +69,12 @@ class ApiEnrichedProfileData(BaseModel):
         description=
         "Summary of key patient testimonials and overall feedback to help new patients"
     )
+    practice_address: str = Field(
+        description=
+        "The full street address of the doctor's primary practice location.")
+    practice_phone: str = Field(
+        description="The primary practice phone number.")
+
     latitude: float = Field(
         description=
         "The decimal latitude coordinate of the primary practice location.")
@@ -63,9 +88,9 @@ class ApiEnrichedProfileData(BaseModel):
     certifications: List[str] = Field(description="Board certifications.")
 
 
-# -----------------------
-# Helpers & light utils
-# -----------------------
+# ------ helpers ---------
+
+
 def utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -108,9 +133,8 @@ def _clean_llm_artifacts(text: str) -> str:
     return text.strip()
 
 
-# -----------------------
-# Vertex / Gemini helpers
-# -----------------------
+# ------- Vertex / Gemini helpers ---------
+
 _GCP_PROJECT = None
 _GCP_LOCATION = None
 _GEMINI_CLIENT: t.Optional[genai.Client] = None
@@ -163,13 +187,18 @@ def _call_gemini_structured_grounded(
     except APIError as e:
         log.error(f"Gemini API call failed. Error: {e}")
         return empty_result
+    except Exception as e:
+        log.error(f"Gemini API call failed (Unexpected): {e}")
+        return empty_result
 
     if not response.candidates:
+        log.warning(f"Gemini returned no candidates.")
         return empty_result
 
     candidate = response.candidates[0]
     json_str = candidate.content.parts[0].text.strip()
 
+    # Pydantic validation and artifact cleaning
     if not json_str:
         log.warning(
             f"Gemini returned empty JSON string. Reason: {candidate.finish_reason.name}"
@@ -179,11 +208,9 @@ def _call_gemini_structured_grounded(
     json_str = _clean_llm_artifacts(json_str)
 
     try:
-        # Validate and convert the JSON string to a Python dictionary
         extracted_dict = ApiEnrichedProfileData.model_validate_json(
             json_str).model_dump()
 
-        # Clean up text fields post-validation (optional but safer)
         extracted_dict['bio_text_consolidated'] = _clean_llm_artifacts(
             extracted_dict.get('bio_text_consolidated', ''))
         extracted_dict['testimonial_summary_text'] = _clean_llm_artifacts(
@@ -208,7 +235,7 @@ def _call_gemini_structured_grounded(
                         'title': attribution.web.title,
                     })
 
-    # Note: We aren't using the 'sources' list in the final BQ row here, but the extraction worked.
+    # no need sources list for final BQ here
     return extracted_dict, sources
 
 
@@ -216,7 +243,7 @@ def embed_text(text: str,
                model_name: str = "text-embedding-004") -> t.List[float]:
     """Uses the genai.Client for text embedding."""
     if _GEMINI_CLIENT is None:
-        # We allow this to run even if the client wasn't fully initialized if we only want embedding
+        # Allow this to run even if the client wasn't fully initialized if we only want embedding
         # but in this connector, init_vertex runs first.
         log.error("Gen AI Client not initialized for embedding.")
         return [0.0] * 768
@@ -240,35 +267,6 @@ def embed_text(text: str,
         return [0.0] * 768
 
 
-def summarize_profile(basic_fields: dict,
-                      model_name: str = "gemini-2.5-flash") -> str:
-    """
-    A separate summarization call
-    """
-    if _GEMINI_CLIENT is None:
-        return ""
-
-    try:
-        name = basic_fields.get("name") or ""
-        specialty = basic_fields.get("primary_specialty_desc") or ""
-        city = basic_fields.get("city") or ""
-
-        prompt = (
-            f"Write a concise 3–4 sentence profile for a physician named {name} "
-            f"in {city} specializing in {specialty}. Avoid claims you can't verify. "
-            f"Tone: warm, factual, helpful to patients.")
-
-        out = _GEMINI_CLIENT.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.7))
-
-        return (out.text or "").strip()
-    except Exception as e:
-        log.error(f"Gen AI Summary generation failed: {e}")
-        return ""
-
-
 def enrich_profile_with_llm(
         doctor: t.Dict[str, Any],
         summary_model: str) -> t.Tuple[t.Dict[str, Any], str]:
@@ -277,12 +275,14 @@ def enrich_profile_with_llm(
     Returns: (extracted_pydantic_dict, text_to_embed)
     """
     name = f"{doctor['first_name']} {doctor['last_name']}"
-    specialty = doctor.get('primary_specialty_desc', 'Physician')
+    specialty = doctor.get('primary_specialty', 'Physician')
 
     prompt = (f"""
         As a medical data expert, find the official profile and review information for 
         Dr. {name}, a specialist in {specialty}. Extract their years of experience, 
-        average patient ratings, certifications, education, hospital affiliations, and key publications.
+        average patient ratings, certifications, education, hospital affiliations, and key professional publications.
+        Provide comprehensive biographical summary of the doctor's experiences, education, and medical focus including research, conferences, and talks.
+        Find the doctor's primary practice location, its **full street address**, and its **phone number**.
         For the 'education' list, include the names of ALL medical schools, residencies, and fellowships.
         For the 'hospitals' list, include the names of ALL hospital and major clinical affiliations.
         For example:
@@ -292,6 +292,8 @@ def enrich_profile_with_llm(
         certifications: ["Board Certified in Cardiology"]
         years_experience: 18
         average_rating: 4.7
+        practice_address: 212 W 51st, New York, NY
+        practice_phone: 7178952314
         publications: ["Cardiac Outcomes in Post-Surgical Patients", "Advances in Echocardiography"]
         Now, repeat this process for Dr. {name}.
         Find the doctor's primary practice location and use Google Search to find its **precise latitude and longitude coordinates**.
@@ -305,7 +307,7 @@ def enrich_profile_with_llm(
     schema = ApiEnrichedProfileData.model_json_schema()
 
     # structured extraction with grounding
-    extracted_dict, sources = _call_gemini_structured_grounded(
+    extracted_dict, _ = _call_gemini_structured_grounded(
         prompt_instruction=prompt, schema=schema, model_name=summary_model)
 
     # Determine the text to embed (fallback to a basic string if extraction failed)
@@ -337,49 +339,57 @@ def query_seed_doctors(
     project: str,
     dataset: str,
     npi_table: str,
-    pubs_bridge_table: t.Optional[str],
     updated_since_days: int,
     specialties: t.List[str],
     state: str,
     max_doctors: int,
 ):
     """
-    Pull a *small* seed set of NPIs to enrich from the NPI table already loaded by Connector A.
+    Pull a small seed set of NPIs to enrich from the NPI table already loaded by Connector A.
     """
-    since_ts = (datetime.utcnow() -
+    since_ts = (datetime.now() -
                 timedelta(days=updated_since_days)).isoformat() + "Z"
     specialties_list = ",".join([f"'{s}'" for s in specialties])
 
     sql = f"""
+    -- Query pulls doctors from NPI table, filtered by recency, state, and specialty
+    -- NOTE: Removing complex JSON extraction for address, relying on LLM to find it.
     WITH base AS (
       SELECT
-        npi,
-        first_name,
-        last_name,
-        primary_specialty_desc,
-        city,
-        state,
-        zip,
-        last_updated_at
-      FROM `{project}.{dataset}.{npi_table}`
-      WHERE state = @state
-        AND primary_specialty_desc IN ({specialties_list})
-        AND (last_updated_at IS NULL OR last_updated_at >= @since)
+        t1.npi,
+        t1.first_name,
+        t1.last_name,
+        t1.primary_specialty_desc,
+        t1.city,
+        t1.state,
+        t1.zip,
+        t1.last_updated_at
+        -- Removed: address_line_1, address_line_2, phone JSON extractions
+      FROM `{project}.{dataset}.{npi_table}` AS t1
+      WHERE t1.state = @state
+        AND t1.primary_specialty IN ({specialties_list})
+        AND (t1.last_updated_at IS NULL OR t1.last_updated_at >= @since)
     )
     SELECT *
     FROM base
-    ORDER BY last_updated_at DESC NULLS LAST
+    -- Best Practice: Order by oldest records first to enrich low-priority/old data first.
+    ORDER BY last_updated_at ASC NULLS FIRST
     LIMIT @limit
     """
-    job = client.query(
-        sql,
-        job_config=bigquery.QueryJobConfig(query_parameters=[
-            bigquery.ScalarQueryParameter("state", "STRING", state),
-            bigquery.ScalarQueryParameter("since", "STRING", since_ts),
-            bigquery.ScalarQueryParameter("limit", "INT64", max_doctors),
-        ]),
-    )
-    return list(job.result())
+    try:
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=[
+                bigquery.ScalarQueryParameter("state", "STRING", state),
+                bigquery.ScalarQueryParameter("since", "STRING", since_ts),
+                bigquery.ScalarQueryParameter("limit", "INT64", max_doctors),
+            ]),
+        )
+        return list(job.result())
+    except Exception as e:
+        log.error(f"Failed to execute BQ seed query: {e}")
+        # Critical failure: stop sync if seed data cannot be retrieved
+        raise RuntimeError("BQ seed query failed.")
 
 
 def load_pmids_for(client: bigquery.Client,
@@ -398,19 +408,23 @@ def load_pmids_for(client: bigquery.Client,
     WHERE t1.npi = @npi
     LIMIT @limit
     """
-    job = client.query(
-        sql,
-        job_config=bigquery.QueryJobConfig(query_parameters=[
-            bigquery.ScalarQueryParameter("npi", "STRING", npi),
-            bigquery.ScalarQueryParameter("limit", "INT64", max_pmids),
-        ]),
-    )
-    return [row["pmid"] for row in job.result()]
+    try:
+        job = client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=[
+                bigquery.ScalarQueryParameter("npi", "STRING", npi),
+                bigquery.ScalarQueryParameter("limit", "INT64", max_pmids),
+            ]),
+        )
+        return [row["pmid"] for row in job.result()]
+    except Exception as e:
+        log.warning(f"Failed to fetch PMIDs for NPI {npi}: {e}")
+        return []
 
 
-# -----------------------
 # Fivetran SDK functions
-# -----------------------
+
+
 def schema(configuration: dict):
     # One wide table for your app to consume
     return [
@@ -433,7 +447,7 @@ def schema(configuration: dict):
                     "type": "string"
                 },
                 {
-                    "name": "primary_specialty_desc",
+                    "name": "primary_specialty",
                     "type": "string"
                 },
                 {
@@ -449,6 +463,14 @@ def schema(configuration: dict):
                     "type": "string"
                 },
                 # Matches final_record fields:
+                {
+                    "name": "practice_address",
+                    "type": "string"
+                },
+                {
+                    "name": "practice_phone",
+                    "type": "string"
+                },
                 {
                     "name": "bio",
                     "type": "string"
@@ -506,7 +528,7 @@ def schema(configuration: dict):
                 {
                     "name": "enriched_at",
                     "type": "string"
-                }  # use string/timestamp for BQ type
+                }
             ]
         },
     ]
@@ -515,19 +537,15 @@ def schema(configuration: dict):
 def update(configuration: dict, state: dict):
     log.info("profiles_enrichment: start")
 
-    # --- REQUIRED config for BigQuery seed
-    bq_project = configuration.get("bq_project")  # e.g. "my-gcp-project"
-    bq_dataset = configuration.get("bq_dataset")  # e.g. "raw"
+    bq_project = configuration.get("bq_project")
+    bq_dataset = configuration.get("bq_dataset")
     bq_npi_table = configuration.get("bq_npi_table", "npi_providers")
-    bq_pub_bridge = configuration.get(
-        "bq_provider_publications_table"
-    )  # e.g. "provider_publications" (optional)
 
     if not (bq_project and bq_dataset):
         raise ValueError(
             "profiles_enrichment requires 'bq_project' and 'bq_dataset'")
 
-    # --- REQUIRED config for Vertex
+    # --- Vertex config
     gcp_project = configuration.get("gcp_project") or bq_project
     gcp_location = configuration.get("gcp_location", "us-central1")
     embedding_model = configuration.get("embedding_model",
@@ -541,9 +559,9 @@ def update(configuration: dict, state: dict):
             "specialties",
             ["Reproductive Endocrinology", "Orthopaedic Surgery"]))
     updated_since = parse_days(configuration.get("updated_since_days", 30))
-    max_doctors = int(configuration.get("max_doctors_per_sync", 100))
-    attach_pmids = bool(configuration.get("attach_pubmed_links", True))
-    max_pmids = int(configuration.get("max_pmids_per_doctor", 25))
+    max_doctors = int(configuration.get("max_doctors_per_sync", 200))
+    # attach_pmids = bool(configuration.get("attach_pubmed_links", True))
+    # max_pmids = int(configuration.get("max_pmids_per_doctor", 25))
     # Placeholder URL for profile picture
     PROFILE_PIC_URL = 'https://storage.googleapis.com/smarterdoc-profile-media-bucket/headshots/12345.png'
 
@@ -557,21 +575,21 @@ def update(configuration: dict, state: dict):
         project=bq_project,
         dataset=bq_dataset,
         npi_table=bq_npi_table,
-        pubs_bridge_table=bq_pub_bridge,
         updated_since_days=updated_since,
         specialties=specialties,
         state=state_filter,
         max_doctors=max_doctors,
     )
-    log.info(f"profiles_enrichment: seed_doctors={len(rows)}")
+    log.info(
+        f"profiles_enrichment: retrieved {len(rows)} doctors for processing.")
 
     processed = 0
     for row in rows:
-        # 1) Collect base fields
+        # base fields
         npi = str(row["npi"])
         first_name = row["first_name"]
         last_name = row["last_name"]
-        primary_specialty_desc = row["primary_specialty_desc"]
+        primary_specialty = row["primary_specialty"]
         city = row["city"]
         state_abbr = row["state"]
         zip_code = row["zip"]
@@ -597,24 +615,29 @@ def update(configuration: dict, state: dict):
             log.error(f"FATAL LLM enrichment failure for NPI={npi}: {e}")
             continue  # Skip to next doctor
 
-        # 3) Generate Embedding Vector
+        # --- 2) Generate Embedding Vector (Multi-Field Vectorization) ---
+        # CHANGE: Build the Composite Text for rich embedding (publications are now in extracted_data)
+        composite_embed_text = " ".join(
+            filter(None, [
+                f"SPECIALTY: {primary_specialty}",
+                f"BIO: {extracted_data.get('bio_text_consolidated', '')}",
+                f"SUMMARY: {extracted_data.get('testimonial_summary_text', '')}",
+                f"PUBS: {', '.join(extracted_data.get('publications', []))}",
+                f"CERTS: {', '.join(extracted_data.get('certifications', []))}",
+                f"EDUCATION: {', '.join(extracted_data.get('education', []))}",
+                f"HOSPITALS: {', '.join(extracted_data.get('hospitals', []))}"
+            ]))
+
         try:
-            vector = embed_text(text_to_embed, embedding_model)
+            vector = embed_text(composite_embed_text, embedding_model)
         except Exception as e:
             log.warning(
-                f"Embedding failed for NPI={npi}: {e}. Using fallback vector.")
+                f"Embedding failed for NPI={npi}. Using fallback vector: {e}")
+            vector: t.List[float] = [0.0] * 768
 
-        # 4) Optional: publications from PubMed connector (use extracted pubs first, then PubMed BQ links)
+        # --- 3) Publication Link Aggregation ---
+        # Publications are now solely the array of strings extracted by
         pub_links: t.List[str] = enriched_data.get('publications', [])
-
-        # If LLM didn't find publications but we have a BQ bridge, fetch those
-        if attach_pmids and bq_pub_bridge and not pub_links:
-            try:
-                pmids = load_pmids_for(client, bq_project, bq_dataset,
-                                       bq_pub_bridge, npi, max_pmids)
-                pub_links = build_pubmed_links(pmids)
-            except Exception as e:
-                log.warning(f"PMIDs fetch failed for NPI={npi}: {e}")
 
         # Ensure ratings is a list of dicts (Pydantic converts them, but we ensure list consistency for BQ JSON type)
         ratings_list = [
@@ -622,7 +645,7 @@ def update(configuration: dict, state: dict):
             for r in enriched_data.get('ratings_summary', [])
         ]
 
-        # 5) Compose FINAL RECORD (Matches indexer.py structure)
+        # --- 4) Compose FINAL RECORD ---
         final_record = {
             "npi":
             npi,
@@ -630,43 +653,49 @@ def update(configuration: dict, state: dict):
             first_name,
             "last_name":
             last_name,
-            "primary_specialty_desc":
-            primary_specialty_desc,  # Changed from 'primary_specialty' to match schema
+            "primary_specialty":
+            primary_specialty,
             "city":
             city,
             "state":
             state_abbr,
             "zip":
             zip_code,
+
+            # LLM-EXTRACTED ADDRESS FIELDS MAPPED
+            "practice_address":
+            extracted_data.get("practice_address"),
+            "practice_phone":
+            extracted_data.get("practice_phone"),
             "bio":
-            enriched_data.get('bio_text_consolidated', text_to_embed),
+            extracted_data.get('bio_text_consolidated', text_to_embed),
             "years_experience":
-            enriched_data.get('years_experience'),
+            extracted_data.get('years_experience'),
             "testimonial_summary_text":
-            enriched_data.get('testimonial_summary_text'),
+            extracted_data.get('testimonial_summary_text'),
             "profile_picture_url":
             PROFILE_PIC_URL,
             "latitude":
-            enriched_data.get('latitude'),
+            extracted_data.get('latitude'),
             "longitude":
-            enriched_data.get('longitude'),
+            extracted_data.get('longitude'),
             "education":
-            enriched_data.get('education', []),
+            extracted_data.get('education', []),
             "hospitals":
-            enriched_data.get('hospitals', []),
+            extracted_data.get('hospitals', []),
             "ratings":
             ratings_list,  # Array of JSON objects
             "publications":
-            pub_links,  # Array of strings (URLs)
+            pub_links,  # Array of strings (Titles/URLs/Identifiers)
             "certifications":
-            enriched_data.get('certifications', []),
+            extracted_data.get('certifications', []),
             "bio_vector":
             vector,  # Array of floats
             "enriched_at":
             utc_now_iso(),
         }
 
-        # 6) Upsert to destination
+        # --- 5) Upsert (Stream to Fivetran) ---
         op.upsert("doctor_profiles", final_record)
         processed += 1
 
@@ -685,12 +714,5 @@ if __name__ == "__main__":
         with open("configuration.json", "r") as f:
             cfg = json.load(f)
     except FileNotFoundError:
-        # Default configuration for debug testing
-        cfg = {
-            "bq_project": "your-project-id",
-            "bq_dataset": "raw",
-            "bq_npi_table": "npi_providers",
-            "state_filter": "NY",
-            "max_doctors_per_sync": 5
-        }
+        cfg = {}
     connector.debug(configuration=cfg)
