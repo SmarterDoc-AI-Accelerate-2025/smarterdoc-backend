@@ -14,8 +14,8 @@ from app.services.speech_service import SpeechToTextService, get_speech_service
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/speech", tags=["Speech-to-Text"])
+# Create router (prefix added when included in api_router)
+router = APIRouter()
 
 
 @router.post("/stream/microphone")
@@ -101,7 +101,25 @@ async def websocket_stream_transcription(
         language_code: Language code (e.g., 'en-US', 'zh-CN')
         sample_rate: Audio sample rate in Hz (default: 16000)
     """
-    await websocket.accept()
+    # Accept WebSocket connection with CORS check
+    origin = websocket.headers.get("origin")
+    
+    # Allow connections from localhost, 127.0.0.1, and production domains
+    if origin:
+        allowed_origins = [
+            "localhost",
+            "127.0.0.1", 
+            "https://smarterdoc-frontend-1094971678787.us-central1.run.app"
+        ]
+        
+        if any(allowed_origin in origin for allowed_origin in allowed_origins):
+            await websocket.accept()
+        else:
+            logger.warning(f"WebSocket connection rejected from origin: {origin}")
+            await websocket.close(code=403, reason="Origin not allowed")
+            return
+    else:
+        await websocket.accept()
     logger.info(f"WebSocket connection accepted - language: {language_code}, sample_rate: {sample_rate}")
     
     service = get_speech_service()
@@ -300,4 +318,3 @@ async def health_check(service: SpeechToTextService = Depends(get_speech_service
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Service unhealthy: {str(e)}"
         )
-
