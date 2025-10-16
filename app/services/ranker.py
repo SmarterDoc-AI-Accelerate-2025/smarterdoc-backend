@@ -1,69 +1,51 @@
-import math
-from ..models.schemas import RankRequest, DoctorHit
-from .elastic_client import fetch_evidence_ids
-from ..util.med_schools import top_tier1_med_schools, top_tier2_meds_schools, top_tier3_med_schools
-from ..util.hospitals import us_tier1_specialty_hospitals, us_tier2_specialty_hospitals, us_tier3_specialty_hospitals
+from app.models.schemas import DoctorHit
 
-WEIGHTS = {
-    "specialty_match": 30.0,
-    "insurance": 25.0,  # in-network /out-of-network
-    "experience": 20.0,
-    "reputation": 15.0,
-    "pub_recent": 10.0,
-    "certification": 12.0,
-    "affiliated_hospitals": 15.0,
-    "education": 8.0
-}
+MOCK = DoctorHit(npi="1234567890",
+          name="Dr. Mock Specialist",
+          specialties=["Orthopedic Surgery", "Sports Medicine"],
+          metro="nyc",
+          distance_km=4.2,
+          in_network=True,
+          reputation_score=0.95,
+          factors={
+              "Experience": 25.0,
+              "Network": 30.0
+          },
+          citations=["PubMed(2023)", "Hospital Profile"],
+          education=[
+              "NYU School of Medicine",
+              "Hospital for Special Surgery Residency"
+          ],
+          hospitals=["NYU Langone", "Mount Sinai"])
+
+# Define the structure for the tool call
+def calculate_recommendation_score(
+        doctors: list[dict],  # List of dicts containing the 30 doctor profiles
+        insurance_weight: float = 0.0,
+        hospital_weight: float = 0.0,
+        specialty_weight: float = 0.0,
+        review_weight: float = 0.0) -> list[dict]:
+    """
+    Calculates a final personalized score for a list of doctors based on
+    dynamically provided user preference weights.
+    """
+    # 1. Normalize weights if necessary (sum to 1.0)
+    # 2. Implement the scoring logic (e.g., Final_Score = w1*feature1 + w2*feature2 + ...)
+    #    (This logic MUST be robust and purely deterministic Python code.)
+
+    # Example: score based on average rating and hospital tier
+    for doc in doctors:
+        doc['final_score'] = (
+            (doc.get('ratings_avg', 0) * review_weight) +
+            (doc.get('hospital_tier', 0) * hospital_weight) +
+            (doc.get('semantic_similarity', 0) * specialty_weight
+             )  # Use semantic similarity as a feature
+        )
+
+    # 3. Sort and return the top 3
+    doctors.sort(key=lambda x: x['final_score'], reverse=True)
+    return doctors[:3]
 
 
-def insurance_score(in_network: bool | None, same_family: bool = False):
-    if in_network: return 1.0
-    if same_family: return 0.7
-    return 0.0
-
-
-def distance_score(km: float | None, cap: float = 80.0):
-    if km is None: return 0.5
-    return max(0.0, 1.0 - min(km, cap) / cap)
-
-
-# TODO: discuss rank factors,
-def rank_candidates(req: RankRequest, es=None) -> list[DoctorHit]:
-    ranked: list[DoctorHit] = []
-    for d in req.candidates:
-        # TODO: replace placeholders with real features (from ES/BQ/metadata)
-        spec = 1.0  # if specialty matches condition slug;
-        ins = insurance_score(d.in_network, False)
-        pub = min(10.0, (d.factors or {}).get("pub_recent", 0.0)) / 10.0
-        years = (d.factors or {}).get("years_experience", 8)
-        exp = math.log1p(years) / math.log(21)
-        rep = (d.reputation_proxy or 0.0) / 15.0
-
-        breakdown = {
-            "specialty_match": WEIGHTS["specialty_match"] * spec,
-            "insurance": WEIGHTS["insurance"] * ins,
-            "pub_recent": WEIGHTS["pub_recent"] * pub,
-            "experience": WEIGHTS["experience"] * exp,
-            "certificaton": WEIGHTS["certification"],  # help me complete this 
-            "reputation": WEIGHTS["reputation"] * rep,
-            "affiliated_hospital":
-            WEIGHTS["affiliated_hospitals"],  # help me complete this
-            "education": WEIGHTS["education"]  #help me complete this
-        }
-        total = sum(breakdown.values())
-        d.factors = (d.factors or {}) | breakdown | {"total": total}
-
-        # Attach top evidence ids (can do later in controller)
-        if es:
-            try:
-                d.citations = fetch_evidence_ids(es,
-                                                 d.npi,
-                                                 req.condition_slug,
-                                                 limit=3)
-            except Exception:
-                d.citations = d.citations or []
-
-        ranked.append(d)
-
-    ranked.sort(key=lambda x: x.factors["total"], reverse=True)
-    return ranked
+def rank_candidates(req):
+    return M

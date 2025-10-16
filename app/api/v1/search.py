@@ -3,7 +3,6 @@ from typing import List
 from ...models.schemas import (SearchRequest, SearchResponse,
                                FrontendSearchRequest, FrontendSearchResponse,
                                VoiceSearchRequest)
-from ...services.elastic_client import hybrid_search
 from ...deps import get_bq
 from ...services.mock_doctor_service import mock_doctor_service
 from app.services.bq_doctor_service import BQDoctorService

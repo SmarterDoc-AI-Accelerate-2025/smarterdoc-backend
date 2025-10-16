@@ -1,4 +1,3 @@
-from elasticsearch import Elasticsearch
 from app.config import settings
 from app.services.chat_service import GenAIChatService, get_chat_service as _get_chat_service
 from app.services.speech_service import SpeechToTextService, get_speech_service as _get_speech_service

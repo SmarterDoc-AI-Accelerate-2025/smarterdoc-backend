@@ -1,4 +1,3 @@
-from elasticsearch import Elasticsearch
 from typing import List, Any, Dict
 from app.models.schemas import SearchRequest, DoctorHit, EstimateRequest
 from app.util.logging import logger
@@ -45,42 +44,3 @@ def fetch_evidence_ids(es: Any,
     return [
         "https://pubmed.ncbi.nlm.nih.gov/3001", "https://hospital.org/research"
     ]
-
-
-class ElasticClient:
-    """
-    The actual ElasticSearch client class structure (used by the Indexer, 
-    but not used by the main API endpoints in this mock setup).
-    """
-
-    def __init__(self):
-        logger.warning(
-            "ElasticClient initialized. This client is currently a MOCK.")
-        self.es = None  # Explicitly set to None to prevent accidental use/crash
-
-    def bulk_upsert(self, records: List[Dict[str, Any]],
-                    index_name: str) -> int:
-        """MOCK: Indexer is running without ElasticSearch."""
-        logger.warning(
-            f"MOCK: Indexing {len(records)} records into ElasticSearch index '{index_name}' skipped."
-        )
-        return len(records)
-
-
-    def fetch_evidence_ids(self,
-                           npi: str,
-                           condition_slug: str,
-                           limit: int = 3) -> list[str]:
-        """Placeholder for fetching evidence documents related to a doctor."""
-        logger.warning("Fetch evidence is a placeholder.")
-        return []
-
-# --- Backward compatibility patch for API import ---
-def hybrid_search(es=None, req=None):
-    """
-    Temporary wrapper to maintain backward compatibility with existing routes.
-    Internally calls ElasticClient.hybrid_search().
-    """
-    from app.services.elastic_client import ElasticClient
-    client = ElasticClient()
-    return client.hybrid_search(req)

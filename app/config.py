@@ -31,11 +31,6 @@ class Settings(BaseSettings):
     MAPS_API_KEY: str | None = None
     # GCP_MEDIA_BUCKET: str | None=None
 
-    ELASTIC_URL: str = "http://localhost:9200"
-    ELASTIC_API_KEY: str | None = None
-    ELASTIC_INDEX_DOCTORS: str = "doctors"
-    ELASTIC_INDEX_EVIDENCE: str = "evidence"
-
     WEB_SEARCH_API_KEY: str = ""  # Set in .env for production
     WEB_SEARCH_ENDPOINT: str = "https://custom-search-api.google.com/search"
 
@@ -75,7 +70,7 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_NUMBER: str | None = None
-    
+
     # ============================================
     # Vertex AI Live API Configuration
     # ============================================
