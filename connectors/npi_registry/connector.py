@@ -13,7 +13,7 @@
 # 3. Resilience: Includes exponential backoff and retry logic for transient API failures.
 # 4. Resumption: Uses 'last_processed_shard_key' to ensure syncs can resume exactly
 #    where they left off after a failure.
-##############################################################
+#############################################################
 
 import json
 from datetime import datetime, timezone
@@ -336,7 +336,7 @@ def update(configuration: dict, state: dict):
                         "npi": str(r.get("number") or ""),
                         "first_name": extract_first_name(r),
                         "last_name": extract_last_name(r),
-                        "primary_specialty_desc": extract_primary_desc(r),
+                        "primary_specialty": extract_primary_desc(r),
                         "city": extract_city(r),
                         "state": extract_state(r),
                         "zip": extract_zip(r),
