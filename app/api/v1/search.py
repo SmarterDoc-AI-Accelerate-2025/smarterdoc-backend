@@ -2,27 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...models.schemas import (SearchRequest, SearchResponse,
                                FrontendSearchRequest, FrontendSearchResponse,
                                VoiceSearchRequest)
-from ...services.elastic_client import hybrid_search
 from ...deps import get_bq
 from ...services.mock_doctor_service import mock_doctor_service
 from app.services.bq_doctor_service import BQDoctorService
 from google.cloud import bigquery
 
 router = APIRouter()
-
-# @router.post("", response_model=SearchResponse)
-# def search(req: SearchRequest, es=Depends(get_elastic)):
-#     """
-#     Original search endpoint - at /v1/search
-#     """
-#     try:
-#         hits = hybrid_search(req, es)
-#         return SearchResponse(candidates=hits)
-#     except Exception as e:
-#         # Log the error for debugging
-#         print(f"Error in hybrid_search: {str(e)}")
-#         raise HTTPException(status_code=500,
-#                             detail=f"Search service error: {str(e)}")
 
 
 @router.post("/doctors", response_model=FrontendSearchResponse)
