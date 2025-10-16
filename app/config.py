@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PORT: int = 8080
     ENVIRONMENT: str = "dev"
     CORS_ORIGINS: List[AnyHttpUrl] | List[str] = ["http://localhost:3000"]
+    APP_BASE_URL: str | None = None  # Base URL for the application (used in callbacks)
 
     # BigQuery & GCP Settings
     GCP_PROJECT_ID: str | None = None

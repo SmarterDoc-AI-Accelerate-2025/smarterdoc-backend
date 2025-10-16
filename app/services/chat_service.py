@@ -217,11 +217,14 @@ class GenAIChatService:
             config = self._build_generation_config(temperature)
             
             # Generate content with streaming
-            async for chunk in self.client.aio.models.generate_content_stream(
+            # Note: generate_content_stream returns a coroutine that needs to be awaited
+            stream = await self.client.aio.models.generate_content_stream(
                 model=model_name,
                 contents=contents,
                 config=config
-            ):
+            )
+            
+            async for chunk in stream:
                 if hasattr(chunk, 'text') and chunk.text:
                     yield chunk.text
                     
