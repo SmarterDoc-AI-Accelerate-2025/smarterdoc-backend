@@ -117,6 +117,48 @@ class BookResponse(BaseModel):
     message: str
 
 
+# Appointment (from frontend)
+class AppointmentDoctor(BaseModel):
+    """Doctor info from frontend appointment page."""
+    id: int
+    name: str
+    rating: float
+    reviews: int
+    specialty: str
+    img: str
+
+
+class AppointmentRequest(BaseModel):
+    """Request model for creating appointments from frontend."""
+    doctors: List[AppointmentDoctor]
+    appointmentTime: str
+    firstName: str
+    lastName: str
+    birth: str
+    email: str
+    phone: str
+    gender: str
+    comment: Optional[str] = None
+
+
+class AppointmentCallResult(BaseModel):
+    """Result of a single call attempt."""
+    doctor_name: str
+    doctor_specialty: str
+    call_status: str  # "success", "failed", "pending"
+    call_sid: Optional[str] = None
+    message: str
+
+
+class AppointmentResponse(BaseModel):
+    """Response model for appointment booking."""
+    status: str  # "success", "partial", "failed"
+    message: str
+    call_results: List[AppointmentCallResult]
+    total_doctors: int
+    successful_calls: int
+
+
 # ============================================
 # Frontend Schemas
 # ============================================

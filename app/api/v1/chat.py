@@ -17,10 +17,10 @@ from app.deps import get_chat_service
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/chat", tags=["AI Chat"])
+router = APIRouter(tags=["AI Chat"])
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
     service: GenAIChatService = Depends(get_chat_service)
