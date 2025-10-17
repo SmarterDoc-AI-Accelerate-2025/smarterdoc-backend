@@ -172,12 +172,10 @@ class FrontendSearchRequest(BaseModel):
     limit: Optional[int] = 30
 
 
-# New request model for ranker API with user input
-class FrontendRankSearchRequest(BaseModel):
-    specialty: Optional[str] = None
-    insurance: Optional[str] = None
-    location: Optional[str] = None
-    userinput: Optional[str] = None
+# Simple search request for new ranker API
+class SimpleSearchRequest(BaseModel):
+    specialty: str
+    query: Optional[str] = None
 
 
 # Frontend Response
