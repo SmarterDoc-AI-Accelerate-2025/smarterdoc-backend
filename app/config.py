@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Vector Search
     VECTOR_SEARCH_ENDPOINT_NAME: str | None = None
-    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'docvec_hybrid_deployed'
+    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'doctor_vec_deployed'
 
     # ============================================
     # AI Chat & Gen AI Configuration
