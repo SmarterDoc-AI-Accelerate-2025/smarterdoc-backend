@@ -172,6 +172,14 @@ class FrontendSearchRequest(BaseModel):
     limit: Optional[int] = 30
 
 
+# New request model for ranker API with user input
+class FrontendRankSearchRequest(BaseModel):
+    specialty: Optional[str] = None
+    insurance: Optional[str] = None
+    location: Optional[str] = None
+    userinput: Optional[str] = None
+
+
 # Frontend Response
 class DoctorOut(BaseModel):
     npi: str
