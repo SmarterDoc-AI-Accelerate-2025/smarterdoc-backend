@@ -324,3 +324,44 @@ class SpeechTranscriptionResult(BaseModel):
 
 class VoiceSearchRequest(BaseModel):
     voice_query: Optional[str] = None
+
+
+# ============================================
+# RAG Output Schemas
+# ============================================
+
+
+class FinalRecommendedDoctor(BaseModel):
+    """The final doctor profile with the score and LLM-generated reasoning."""
+    npi: str
+    # first_name: str
+    # last_name: str
+    # final_weighted_score: float = Field(
+    #     description="The final score calculated by the Python ranker.")
+    # agent_reasoning_summary: str = Field(
+    #     description=
+    #     "The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
+    # )
+
+
+class FinalRecommendationList(BaseModel):
+    """The container for the structured list of Top 3 doctors returned by the RAG Agent."""
+    recommendations: List[FinalRecommendedDoctor]
+
+
+class AgentSearchRequest(BaseModel):
+    """The unified input for the Hybrid Search RAG pipeline."""
+    specialty: str = Field(
+        description=
+        "The primary medical specialty to search for (e.g., 'OBGYN').")
+    query: str = Field(
+        description=
+        "The user's free-text request (e.g., 'board certified doctor who's patient and has extensive experience in fertility treatments')."
+    )
+
+
+class AgentSearchResponse(BaseModel):
+    """The final response containing the ranked list of full doctor profiles."""
+    doctors: List[DoctorOut]
+    total_results: int = Field(default=30)
+    search_query: str

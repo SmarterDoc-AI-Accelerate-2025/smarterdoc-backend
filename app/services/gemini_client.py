@@ -1,14 +1,14 @@
 import json
 import time
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Callable
 import re
 from google import genai
 from google.genai import types
-
 from pydantic import BaseModel, Field
-
+from app.services.ranker import DynamicRankingWeights
 from app.config import settings
 from app.util.logging import logger
+from app.models.schemas import FinalRecommendationList
 
 
 # pydantic schemas
@@ -66,17 +66,12 @@ def _clean_llm_artifacts(text: str) -> str:
     if not text:
         return text
 
-    # Pattern 1: Matches [INDEX 1, 2, 3, ...] or [INDEX 1] artifacts
     text = re.sub(r'\[INDEX\s+\d+(?:,\s*\d+)*\]',
                   '',
                   text,
                   flags=re.IGNORECASE)
 
-    # Pattern 2: Matches artifact text like INDEX_1256 that occasionally appears
     text = re.sub(r'INDEX_\d+', '', text, flags=re.IGNORECASE)
-
-    # Pattern 3: Matches leftover JSON keys that might leak out of the structure
-    # Example: "{"source": "Vitals", INDEX_123: 0, "score": 4.5}" -> Not perfect, but helps.
 
     return text.strip()
 
@@ -94,6 +89,7 @@ class GeminiClient:
                                    project=settings.GCP_PROJECT_ID,
                                    location=settings.GCP_REGION)
         self.llm_model = settings.GEMINI_MODEL
+        self.EMBEDDING_DIMENSION = 3072
 
     def _call_gemini_api(self, prompt_text: str,
                          config: types.GenerateContentConfig) -> Any:
@@ -246,10 +242,14 @@ class GeminiClient:
 
         return extracted_dict, sources
 
-    def generate_embedding(self, text_list: List[str]) -> List[List[float]]:
+    def generate_embedding(
+            self,
+            text_list: List[str],
+            task_type="RETRIEVAL_DOCUMENT") -> List[List[float]]:
         """
         Generates text embeddings (vectors) for a list of texts using the 
         embed_content method of the Gen AI SDK.
+        This is for dense embeddings.
         """
         if not text_list:
             return []
@@ -258,8 +258,10 @@ class GeminiClient:
             response = self.client.models.embed_content(
                 model=settings.EMBEDDING_MODEL_NAME,
                 contents=text_list,  # contents argument takes a list of strings
-                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT",
-                                                auto_truncate=True))
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    auto_truncate=True,
+                    output_dimensionality=self.EMBEDDING_DIMENSION))
 
             # response object now contains the embeddings property
             embeddings = [p.values for p in response.embeddings]
@@ -270,4 +272,119 @@ class GeminiClient:
         except Exception as e:
             logger.error(f"Gemini Embeddings API call failed. Error: {e}")
             # Return a list of empty vectors equal to the number of input texts
-            return [[0.0] * 768] * len(text_list)
+            return [[0.0] * self.EMBEDDING_DIMENSION] * len(text_list)
+
+    def generate_dense_embedding_single(self, text: str) -> List[float]:
+        """
+        Generates a single dense embedding vector for a query text by calling 
+        the batch method and extracting the single result.
+        """
+        if not text:
+            return [0.0] * self.EMBEDDING_DIMENSION
+
+        # 1. Call the batch method: Returns List[List[float]]
+        list_of_vectors = self.generate_embedding([text],
+                                                  task_type="RETRIEVAL_QUERY")
+
+        # 2. Extract the single inner list: Returns List[float]
+        if list_of_vectors and isinstance(list_of_vectors[0], list):
+            # Successfully extracted the single vector
+            return list_of_vectors[0]
+
+        # Handle unexpected empty or malformed result
+        return [0.0] * self.EMBEDDING_DIMENSION
+
+    async def generate_content_with_tool(
+            self,
+            prompt: str,
+            tool:
+        Callable,  # The Python function to be called (e.g., calculate_ranking_weights)
+            tool_name: str,
+            initial_context: str = "") -> Dict[str, Any]:
+        """
+        Uses the Gemini model to analyze a prompt, generate parameters for a 
+        specific tool, execute the tool, and return the result.
+        
+        For simplicity, this implementation assumes the LLM call 
+        is the single step required.
+        """
+
+        tool_config = [types.Tool.from_function(tool)]
+
+        # 1. First Call: Ask the LLM to determine the tool arguments (weights)
+
+        # The prompt guides the LLM to use the tool
+        system_instruction = (
+            "You are an expert personalized recommendation agent. "
+            "Analyze the user query below and determine the numeric weights (0.0 to 1.0) "
+            "that reflect the user's explicit priorities. You MUST call the "
+            f"'{tool_name}' function with the appropriate weights. Do NOT output text first. Ignore insurance for now, assume all doctors accept all insurance."
+            "General Guidelines: - Assign higher weights to semantic_score, reputation_rating, and experience_years in general if "
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            tools=tool_config,
+            temperature=
+            0.0  # Keep this low for deterministic tool-argument output
+        )
+
+        response = self._call_gemini_api(
+            f"User Query: {prompt}\nContext: {initial_context}", config)
+
+        # Check for tool call in the response
+        if (response is None or not response.candidates
+                or not response.candidates[0].function_calls):
+            logger.warning(
+                "LLM failed to call the ranking tool. Using default weights.")
+            return {
+                "tool_output": tool(**DynamicRankingWeights().model_dump())
+            }  # Use default weights
+
+        # 2. Execute the Tool (Weight Generation)
+        function_call = response.candidates[0].function_calls[0]
+        args = dict(function_call.args)
+
+        logger.info(f"LLM determined dynamic weights: {args}")
+
+        # The tool output will be the list of Top 3 Doctors with scores
+        tool_output = tool(**args)
+
+        return {"tool_output": tool_output}
+
+    def generate_text(self, prompt: str) -> str:
+        # Simple text generation method for the final justification (Stage 4)
+        config = types.GenerateContentConfig(temperature=0.7)
+        response = self._call_gemini_api(prompt, config)
+
+        if response and response.candidates:
+            return response.candidates[0].content.parts[0].text
+        return "Could not generate a full recommendation summary."
+
+    def generate_structured_data(self, prompt: str, schema: Dict[str,
+                                                                 Any]) -> str:
+        """
+        Generates content structured according to a JSON schema.
+        """
+        system_instruction = (
+            "You are a structured data engine. Your sole task is to analyze the context "
+            "and output a single, valid JSON object that strictly adheres to the provided schema. "
+            "Do not include any preambles or explanations outside the JSON block."
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            response_mime_type="application/json",
+            response_schema=schema,
+            temperature=0.0)
+
+        response = self._call_gemini_api(prompt, config)
+
+        if response is None or not response.candidates:
+            return json.dumps({"recommendations": []})
+
+        json_str = response.candidates[0].content.parts[0].text.strip()
+
+        # Optional: Add error handling/cleanup like _clean_llm_artifacts(json_str) here
+
+        return json_str
