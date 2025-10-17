@@ -5,6 +5,8 @@ from app.models.schemas import FinalRecommendedDoctor
 from pydantic import ValidationError
 from app.util.hospitals import HOSPITAL_TIERS
 from app.util.med_schools import MED_SCHOOL_TIERS
+from app.models.schemas import DoctorHit, DoctorOut, FrontendSearchResponse
+from typing import List
 
 MOCK = DoctorHit(npi="1234567890",
                  name="Dr. Mock Specialist",
@@ -190,3 +192,29 @@ def apply_personalized_reranking(
                            reverse=True)
 
     return scored_candidates[:10]
+def rank_candidates(specialty: str, query: str) -> List[DoctorOut]:
+    """
+    对医生候选列表进行智能排序
+    接受专科和查询条件，返回排序后的医生列表
+    """
+    # TODO: 实现具体的排序算法
+    # 目前返回mock数据作为占位符
+    return []
+
+
+def search_and_rank_doctors_service(specialty: str, query: str) -> FrontendSearchResponse:
+    """
+    搜索医生并通过ranker进行智能排序的服务函数
+    接受新的数据格式: {"specialty": STRING, "query": STRING}
+    返回前端需要的格式数据
+    """
+    # 调用ranker进行智能排序
+    ranked_doctors = rank_candidates(specialty, query)
+    
+    return FrontendSearchResponse(
+        doctors=ranked_doctors,
+        total_results=len(ranked_doctors),
+        search_query=query
+    )
+
+

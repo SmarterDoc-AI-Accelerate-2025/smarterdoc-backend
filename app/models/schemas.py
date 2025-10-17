@@ -172,6 +172,12 @@ class FrontendSearchRequest(BaseModel):
     limit: Optional[int] = 30
 
 
+# Simple search request for new ranker API
+class SimpleSearchRequest(BaseModel):
+    specialty: str
+    query: Optional[str] = None
+
+
 # Frontend Response
 class DoctorOut(BaseModel):
     npi: str
