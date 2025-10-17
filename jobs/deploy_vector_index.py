@@ -11,8 +11,8 @@ PROJECT_ID = settings.GCP_PROJECT_ID  # <-- Replace with your project ID
 REGION = "us-central1"  # <-- Replace with your region
 BUCKET_URI = "gs://smartdoc_vectors/"  # <-- GCS location of your JSONL files
 
-INDEX_DISPLAY_NAME = "docvec_profile_hybrid_index"
-DEPLOYED_INDEX_ID = "docvec_hybrid_deployed"  # Must be unique and contain only letters, numbers, or underscores
+INDEX_DISPLAY_NAME = "doctor_vec_profile_index"
+DEPLOYED_INDEX_ID = "doctor_vec_deployed"  # Must be unique and contain only letters, numbers, or underscores
 VECTOR_DIMENSIONS = 3072  # Must match your text-embedding-004 dimensions
 APPROXIMATE_NEIGHBORS = 100  # Tuning parameter
 
@@ -38,28 +38,43 @@ def create_index_endpoint():
     return endpoint
 
 
-# -------------------------------------------------------------------
-# B. CREATE THE HYBRID INDEX (Reading vectors from GCS)
-# -------------------------------------------------------------------
-def create_hybrid_index():
-    """Builds the Vector Search Index from data in GCS."""
-    print(
-        f"Creating Index (this may take up to an hour for large datasets)...")
-
-    # The create_tree_ah_index function reads the JSONL files from the GCS URI
+def create_index():
     index = aiplatform.MatchingEngineIndex.create_tree_ah_index(
         display_name=INDEX_DISPLAY_NAME,
-        contents_delta_uri=BUCKET_URI,  # Source of your vector data files
-        dimensions=VECTOR_DIMENSIONS,
+        contents_delta_uri=BUCKET_URI,
+        dimensions=VECTOR_DIMENSIONS,  # The key change: specify 3072
         approximate_neighbors_count=APPROXIMATE_NEIGHBORS,
         distance_measure_type=
-        "DOT_PRODUCT_DISTANCE",  # Common for semantic search
-        # We must use STREAM_UPDATE to support the Sparse Vector format
-        # and be able to update with the streaming MatchEngineIndex.
-        index_update_method="STREAM_UPDATE",
+        "COSINE_DISTANCE",  # or DOT_PRODUCT_DISTANCE, based on your vectors
+        # Sparse configuration (like embedding_config.sparse_embedding_config) MUST be omitted.
     )
     print(f"Index creation started. Resource name: {index.name}")
+
     return index
+
+
+# # -------------------------------------------------------------------
+# # B. CREATE THE HYBRID INDEX (Reading vectors from GCS)
+# # -------------------------------------------------------------------
+# def create_hybrid_index():
+#     """Builds the Vector Search Index from data in GCS."""
+#     print(
+#         f"Creating Index (this may take up to an hour for large datasets)...")
+
+#     # The create_tree_ah_index function reads the JSONL files from the GCS URI
+#     index = aiplatform.MatchingEngineIndex.create_tree_ah_index(
+#         display_name=INDEX_DISPLAY_NAME,
+#         contents_delta_uri=BUCKET_URI,  # Source of your vector data files
+#         dimensions=VECTOR_DIMENSIONS,
+#         approximate_neighbors_count=APPROXIMATE_NEIGHBORS,
+#         distance_measure_type=
+#         "DOT_PRODUCT_DISTANCE",  # Common for semantic search
+#         # We must use STREAM_UPDATE to support the Sparse Vector format
+#         # and be able to update with the streaming MatchEngineIndex.
+#         index_update_method="STREAM_UPDATE",
+#     )
+#     print(f"Index creation started. Resource name: {index.name}")
+#     return index
 
 
 # -------------------------------------------------------------------
@@ -95,7 +110,7 @@ if __name__ == "__main__":
 
         # Step 2: Build the index from the data you exported to GCS
         # Note: Index creation is a Long Running Operation (LRO) and can take time
-        matching_index = create_hybrid_index()
+        matching_index = create_index()
 
         # Step 3: Deploy the index to the endpoint
         deploy_index(matching_index, index_endpoint)
