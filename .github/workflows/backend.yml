@@ -61,4 +61,8 @@ jobs:
           --set-env-vars BQ_PROFILES_TABLE=doctor_profiles \
           --set-env-vars BQ_GEO_CACHE_TABLE=_geocode_cache \
           --set-env-vars BQ_GEO_INPUT_TABLE=_geocode_input \
+          --set-env-vars TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} \
+          --set-env-vars TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} \
+          --set-env-vars TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} \
+          --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
           --quiet

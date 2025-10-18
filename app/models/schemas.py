@@ -103,34 +103,22 @@ class EstimateResponse(BaseModel):
     costs: Dict[str, Dict[str, float]]  # {cpt_code: {low, median, high}}
 
 
-# Book
-class BookRequest(BaseModel):
-    npi: str
-    user_name: str
-    preferred_times: List[str]
-    reason: str
-    callback_number: str
-
-
-class BookResponse(BaseModel):
-    status: str
-    message: str
+# Book schemas removed - not used in current implementation
 
 
 # Appointment (from frontend)
-class AppointmentDoctor(BaseModel):
-    """Doctor info from frontend appointment page."""
-    id: int
+class AppointmentDoctorRef(BaseModel):
+    npi: str
     name: str
-    rating: float
-    reviews: int
     specialty: str
-    img: str
+    rating: Optional[float] = None
+    reviews: Optional[int] = None
+    img: Optional[str] = None
 
 
 class AppointmentRequest(BaseModel):
     """Request model for creating appointments from frontend."""
-    doctors: List[AppointmentDoctor]
+    doctors: List[AppointmentDoctorRef]
     appointmentTime: str
     firstName: str
     lastName: str
@@ -365,3 +353,4 @@ class AgentSearchResponse(BaseModel):
     doctors: List[DoctorOut]
     total_results: int = Field(default=30)
     search_query: str
+
