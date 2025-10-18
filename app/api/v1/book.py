@@ -2,8 +2,6 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 import httpx
 from ...models.schemas import (
-    BookRequest, 
-    BookResponse, 
     AppointmentRequest, 
     AppointmentResponse,
     AppointmentCallResult
@@ -14,15 +12,6 @@ import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-# TODO: implement appointment assistant
-@router.post("/book", response_model=BookResponse)
-def book(req: BookRequest):
-    """Legacy book endpoint (kept for backward compatibility)"""
-    from ...services.telephony import initiate_call
-    ok, msg = initiate_call(req)
-    return BookResponse(status=("initiated" if ok else "failed"), message=msg)
 
 
 @router.post("/appointments", response_model=AppointmentResponse)
@@ -54,7 +43,7 @@ async def create_appointment(req: AppointmentRequest):
                 doctor_name=doctor.name,
                 doctor_specialty=doctor.specialty,
                 call_status="success",
-                call_sid=f"MOCK_CALL_{doctor.id}",
+                call_sid=f"MOCK_CALL_{doctor.npi}",
                 message=f"Mock call initiated to {doctor.name} for appointment on {req.appointmentTime}"
             ))
             successful_calls += 1
@@ -71,33 +60,33 @@ async def create_appointment(req: AppointmentRequest):
     # Fixed phone number for all appointment calls
     to_number = "+12019325000"
     
-    # Base URL for internal API calls
-    base_url = "http://localhost:8080"  # Internal call within the same service
+    # Base URL for internal API calls - use environment variable or default to localhost
+    base_url = settings.APP_BASE_URL or "http://localhost:8080"
     
     for doctor in req.doctors:
         try:
             # Construct system instruction with appointment details
             system_instruction = f"""You are SmarterDoc Agent, a virtual assistant that helps patients schedule appointments with doctors.
 
-You are calling Dr. {doctor.name}, who is a {doctor.specialty} specialist.
+                You are calling Dr. {doctor.name}, who is a {doctor.specialty} specialist.
 
-Patient Information:
-- Name: {req.firstName} {req.lastName}
-- Phone: {req.phone}
-- Date of Birth: {req.birth}
-- Gender: {req.gender}
-- Preferred Appointment Time: {req.appointmentTime}
-- Reason for Visit: {req.comment or 'General consultation'}
+                Patient Information:
+                - Name: {req.firstName} {req.lastName}
+                - Phone: {req.phone}
+                - Date of Birth: {req.birth}
+                - Gender: {req.gender}
+                - Preferred Appointment Time: {req.appointmentTime}
+                - Reason for Visit: {req.comment or 'General consultation'}
 
-Your task:
-1. Greet the doctor politely and introduce yourself
-2. Explain that you're calling on behalf of the patient {req.firstName} {req.lastName}
-3. Request to schedule an appointment around the preferred time: {req.appointmentTime}
-4. Mention the reason for the visit: {req.comment or 'General consultation'}
-5. Confirm the appointment details with the doctor
-6. Thank the doctor for their time
+                Your task:
+                1. Greet the doctor politely and introduce yourself
+                2. Explain that you're calling on behalf of the patient {req.firstName} {req.lastName}
+                3. Request to schedule an appointment around the preferred time: {req.appointmentTime}
+                4. Mention the reason for the visit: {req.comment or 'General consultation'}
+                5. Confirm the appointment details with the doctor
+                6. Thank the doctor for their time
 
-Maintain a warm, respectful, and professional tone throughout the conversation."""
+                Maintain a warm, respectful, and professional tone throughout the conversation."""
 
             logger.info(f"Initiating call to {to_number} for {doctor.name}")
             logger.info(f"System instruction length: {len(system_instruction)} chars")
