@@ -1,5 +1,4 @@
 from typing import List, Dict, Any
-from app.services.sparse_client import SparseVectorizerClient
 from app.services.vertex_vector_search_service import VertexVectorSearchService  # Stage 1
 from app.services.gemini_client import GeminiClient  # LLM & Tool Orchestration
 from app.services.ranker import generate_ranking_weights, apply_personalized_reranking  # Stage 3 Tool
@@ -8,9 +7,6 @@ from app.util.hospitals import HOSPITAL_TIERS
 from app.util.med_schools import MED_SCHOOL_TIERS
 from app.util.logging import logger
 
-# reciprocal rank fusion for hybrid search
-DEFAULT_RRF_ALPHA = 0.5
-
 
 class RagAgentService:
 
@@ -18,7 +14,6 @@ class RagAgentService:
         self.vector_search_service = vector_search_service
         self.gemini_client = gemini_client
         self.weight_tool_name = 'generate_ranking_weights'
-        self.sparse_client = SparseVectorizerClient()
 
     def _build_tier_context(self) -> str:
         """Creates a concise, structured context string for the LLM."""
@@ -33,7 +28,7 @@ class RagAgentService:
         for tier, schools in MED_SCHOOL_TIERS.items():
             education_context += f"{tier} includes {', '.join(schools[:2])} and others. "
 
-        return f"Ranking Rules: {hospital_context.strip()} | {education_context.strip()} | Hybrid Search (Alpha={DEFAULT_RRF_ALPHA} to blend semantic and keyword results)."
+        return f"Ranking Rules: {hospital_context.strip()} | {education_context.strip()} | Dense Embedding Search for semantic similarity."
 
     async def get_recommended_doctors(
             self, request_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -42,20 +37,18 @@ class RagAgentService:
         specialty_text = request_data.get('specialty', '')
         metadata_filters = None
 
+        # Combine user_query and specialty_text for dense embedding search
+        combined_query = f"{user_query} {specialty_text}".strip()
+        
+        # Generate dense embedding for the combined query
         dense_query_vector = self.gemini_client.generate_dense_embedding_single(
-            user_query)
+            combined_query)
 
-        # Use the sparse client to generate the sparse vector data
-        sparse_query_vector_data = self.sparse_client.get_sparse_embedding(
-            specialty_text)
-
-        # 2. STAGE 1: Hybrid Search Retrieval (Fastest Latency, Top 30)
-        # Call the new search_hybrid method on your VertexLiveService
-        candidates_30 = await self.vector_search_service.search_hybrid(
+        # 2. STAGE 1: Dense Embedding Search Retrieval (Fastest Latency, Top 30)
+        # Call the new search_dense method on your VertexVectorSearchService
+        candidates_30 = await self.vector_search_service.search_dense(
             dense_vector=dense_query_vector,
-            sparse_vector_data=sparse_query_vector_data,
             k=30,
-            rrf_alpha=DEFAULT_RRF_ALPHA,  # Blend factor
             metadata_filters=metadata_filters)
 
         if not candidates_30:

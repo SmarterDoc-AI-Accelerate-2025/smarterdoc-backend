@@ -31,8 +31,10 @@ class VertexVectorSearchService:
         self.bq_service = bq_service
 
         # 1. Initialize Vertex AI client
+        # Force gRPC transport to avoid REST query param issues on public endpoints
         aiplatform.init(project=settings.GCP_PROJECT_ID,
-                        location=settings.GCP_REGION)
+                        location=settings.GCP_REGION,
+                        api_transport="grpc")
 
         # 2. Instantiate the deployed Index Endpoint
         # These names must match your deployment in Google Cloud Console/Vertex AI
@@ -155,4 +157,94 @@ class VertexVectorSearchService:
 
         except Exception as e:
             logger.error(f"Hybrid Search execution failed. Error: {e}")
+            return []
+
+    async def search_dense(
+        self,
+        dense_vector: List[float],
+        k: int,
+        metadata_filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Performs a dense embedding search against the deployed index.
+
+        The process is:
+        1. Query the Vector Search Endpoint with dense vector only.
+        2. Get the top K matching IDs (NPIs) and their similarity scores.
+        3. Look up the full doctor profiles in BigQuery/DB using the NPIs (Data Enrichment).
+        4. Return the enriched profiles with the similarity score attached.
+        """
+        logger.info(f"===== DEBUG SHOW DENSE VECTORS: {dense_vector[:4]} ")
+
+        try:
+            # 1. For dense-only search, we can pass the dense vector directly
+            # According to the API documentation, queries can be List[List[float]] for dense-only queries
+            pass  # We'll pass the dense_vector directly to find_neighbors
+        except Exception as e:
+            logger.error(f"Error preparing dense query: {e}")
+            return []
+
+        def _find_neighbors_sync(deployed_id, query_list, num, filters):
+            """Synchronous function to be run in the executor."""
+            return self.endpoint.find_neighbors(deployed_index_id=deployed_id,
+                                                queries=query_list,
+                                                num_neighbors=num,
+                                                filter=filters)
+
+        # 2. Execute the query using the endpoint's find_neighbors method
+        try:
+            loop = asyncio.get_event_loop()
+
+            # find_neighbors is synchronous and must be run in an executor in an async function
+            # For dense-only search, we pass the dense vector directly as List[List[float]]
+            results: List[List[MatchNeighbor]] = await loop.run_in_executor(
+                None,  # Executor
+                _find_neighbors_sync,  # Function to run
+                self.deployed_index_id,  # Arg 1: deployed_id (Positional)
+                [dense_vector],  # Arg 2: query_list (Positional) - pass dense vector directly
+                k,  # Arg 3: num (Positional)
+                metadata_filters  # Arg 4: filters (Positional)
+            )
+
+            # 3. Process results: Extract NPIs and Similarity Scores
+            matched_npi_data = {}
+            if results and results[0]:
+                for match_neighbor in results[0]:
+                    npi = match_neighbor.id
+                    # The 'distance' attribute on MatchNeighbor contains the similarity score
+                    matched_npi_data[npi] = {
+                        "npi": npi,
+                        "semantic_similarity_score": match_neighbor.distance,
+                    }
+
+            if not matched_npi_data:
+                logger.warning("Dense search returned no matches.")
+                return []
+
+            # 4. CRITICAL LOOK-UP STEP: Fetch full doctor profiles from BQ/DB
+            npi_list = list(matched_npi_data.keys())
+
+            # Use the injected BQ service instance
+            # NOTE: This method on your BQDoctorService must be implemented to fetch full data by NPI list.
+            full_profiles = await self.bq_service.fetch_full_profiles_by_npi(
+                npi_list)
+
+            # 5. Combine scores and profiles (Data Enrichment)
+            candidates = []
+            for profile in full_profiles:
+                npi = profile.get('npi')
+                if npi in matched_npi_data:
+                    # Merge the full profile data with the similarity score obtained from Vector Search
+                    profile_with_score = {
+                        **profile, "semantic_similarity_score":
+                        matched_npi_data[npi]["semantic_similarity_score"]
+                    }
+                    candidates.append(profile_with_score)
+
+            logger.info(
+                f"Successfully enriched {len(candidates)} candidates from DB lookup."
+            )
+            return candidates
+
+        except Exception as e:
+            logger.error(f"Dense Search execution failed. Error: {e}")
             return []
