@@ -6,7 +6,7 @@ import json
 import asyncio
 from typing import Dict, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -194,7 +194,7 @@ async def hangup_call(call_sid: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.api_route("/twiml", methods=["GET", "POST"], response_class=PlainTextResponse)
+@router.api_route("/twiml", methods=["GET", "POST"])
 async def get_twiml(
     request: Request, 
     voice: str | None = None, 
@@ -213,7 +213,7 @@ async def get_twiml(
         host = forwarded_host if forwarded_host else request.headers.get("host", "localhost:8080")
         
         # Determine WebSocket scheme
-        # ngrok uses https, so WebSocket should be wss
+        # Cloud Run uses https, so WebSocket should be wss
         forwarded_proto = request.headers.get("x-forwarded-proto", "")
         ws_scheme = "wss" if forwarded_proto == "https" or forwarded_host else "ws"
         
@@ -236,15 +236,25 @@ async def get_twiml(
         logger.info(f"Generated TwiML with WebSocket URL: {ws_url}")
         logger.info(f"Request headers - Host: {host}, Proto: {forwarded_proto}, Forwarded-Host: {forwarded_host}")
         
-        return twiml
+        # Return TwiML with correct Content-Type
+        return Response(
+            content=twiml,
+            media_type="text/xml",
+            headers={"Content-Type": "text/xml; charset=utf-8"}
+        )
         
     except Exception as e:
         logger.error(f"Error generating TwiML: {e}")
-        # Return a basic error TwiML
-        return """<?xml version="1.0" encoding="UTF-8"?>
+        # Return a basic error TwiML with correct Content-Type
+        error_twiml = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say>Sorry, there was an error connecting the call.</Say>
 </Response>"""
+        return Response(
+            content=error_twiml,
+            media_type="text/xml",
+            headers={"Content-Type": "text/xml; charset=utf-8"}
+        )
 
 
 @router.websocket("/twilio-stream")
@@ -262,8 +272,15 @@ async def twilio_stream_websocket(
     - instruction: Optional system instruction
     """
     logger.info(f"WebSocket connection attempt - Voice: {voice}, Instruction: {instruction}")
-    await websocket.accept()
-    logger.info("✓ WebSocket connection accepted from Twilio")
+    logger.info(f"WebSocket URL: {websocket.url}")
+    logger.info(f"WebSocket headers: {dict(websocket.headers)}")
+    
+    try:
+        await websocket.accept()
+        logger.info("✓ WebSocket connection accepted from Twilio")
+    except Exception as e:
+        logger.error(f"Failed to accept WebSocket connection: {e}")
+        return
     
     stream_sid = None
     call_sid = None
@@ -398,4 +415,43 @@ async def health_check():
         "vertex_model": settings.VERTEX_LIVE_MODEL,
         "vertex_voice": settings.VERTEX_LIVE_VOICE,
     }
+
+
+@router.get("/test-twiml")
+async def test_twiml(request: Request):
+    """
+    Test endpoint to verify TwiML generation.
+    """
+    try:
+        # Get host from request
+        forwarded_host = request.headers.get("x-forwarded-host")
+        host = forwarded_host if forwarded_host else request.headers.get("host", "localhost:8080")
+        
+        # Determine WebSocket scheme
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        ws_scheme = "wss" if forwarded_proto == "https" or forwarded_host else "ws"
+        
+        # Build WebSocket URL
+        ws_url = f"{ws_scheme}://{host}/api/v1/telephony/twilio-stream"
+        
+        # Generate TwiML
+        twiml = generate_twiml(ws_url)
+        
+        return {
+            "status": "success",
+            "websocket_url": ws_url,
+            "twiml": twiml,
+            "headers": {
+                "host": host,
+                "forwarded_host": forwarded_host,
+                "forwarded_proto": forwarded_proto
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in test-twiml: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
