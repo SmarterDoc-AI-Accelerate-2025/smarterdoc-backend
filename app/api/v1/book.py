@@ -8,6 +8,7 @@ from ...models.schemas import (
 from ...services.telephony import get_twilio_service
 from ...config import settings
 import logging
+import httpx
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ async def create_appointment(req: AppointmentRequest, request: Request):
             successful_calls=successful_calls
         )
     
-    # Real Twilio calls
+    # Real Twilio calls using /call API
     # Fixed phone number for all appointment calls
     to_number = "+12019325000"
     
@@ -105,32 +106,40 @@ async def create_appointment(req: AppointmentRequest, request: Request):
             logger.info(f"Initiating call to {to_number} for {doctor.name}")
             logger.info(f"System instruction length: {len(system_instruction)} chars")
             
-            # Get public URL for TwiML callback
+            # Get public URL for internal API call
             public_url = get_public_url(request)
             
-            # Build TwiML URL with system instruction as query parameter
-            from urllib.parse import quote
-            twiml_url = f"{public_url}/api/v1/telephony/twiml?instruction={quote(system_instruction)}&voice={settings.VERTEX_LIVE_VOICE}"
+            # Call the /call API instead of direct Twilio service
+            call_api_url = f"{public_url}/api/v1/telephony/call"
             
-            # Call Twilio service directly
-            result = twilio_service.initiate_call(
-                to_number=to_number,
-                twiml_url=twiml_url,
-                from_number=None  # Use default Twilio number
-            )
+            call_payload = {
+                "to": to_number,
+                "voice": settings.VERTEX_LIVE_VOICE,
+                "system_instruction": system_instruction
+            }
             
-            # Extract call_sid from result
-            call_sid = result.get("sid")
+            # Make HTTP request to /call API
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    call_api_url,
+                    json=call_payload,
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                result = response.json()
+            
+            # Extract call_sid from API response
+            call_sid = result.get("call_sid")
             
             call_results.append(AppointmentCallResult(
                 doctor_name=doctor.name,
                 doctor_specialty=doctor.specialty,
                 call_status="success",
                 call_sid=call_sid,
-                message=f"Call initiated successfully. Call SID: {call_sid}"
+                message=f"Call initiated successfully via /call API. Call SID: {call_sid}"
             ))
             successful_calls += 1
-            logger.info(f"Successfully initiated call for {doctor.name}: {call_sid}")
+            logger.info(f"Successfully initiated call for {doctor.name} via /call API: {call_sid}")
             
         except Exception as e:
             logger.error(f"Failed to call {doctor.name}: {str(e)}")
@@ -139,7 +148,7 @@ async def create_appointment(req: AppointmentRequest, request: Request):
                 doctor_specialty=doctor.specialty,
                 call_status="failed",
                 call_sid=None,
-                message=f"Failed to initiate call: {str(e)}"
+                message=f"Failed to initiate call via /call API: {str(e)}"
             ))
     
     # Determine overall status
