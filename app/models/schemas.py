@@ -322,15 +322,34 @@ class VoiceSearchRequest(BaseModel):
 class FinalRecommendedDoctor(BaseModel):
     """The final doctor profile with the score and LLM-generated reasoning."""
     npi: str
+    npi: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    primary_specialty: Optional[str]
+    years_experience: Optional[int]
+    bio: Optional[str] = None
+    testimonial_summary_text: Optional[str] = None
+    publications: Optional[List[str]] = None
+    certifications: Optional[List[str]] = None
+    education: Optional[List[str]] = None
+    hospitals: Optional[List[str]] = None
+    ratings: Optional[List[RatingRecord]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    final_weighted_score: Optional[float] = None
+    feature_scores: Optional[float] = None
+    semantic_similarity_score: Optional[float] = None
     agent_reasoning_summary: str = Field(
         default="",
-        description="The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
+        description=
+        "The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
     )
 
 
 class FinalRecommendationList(BaseModel):
     """The container for the structured list of Top 3 doctors returned by the RAG Agent."""
-    recommendations: List[FinalRecommendedDoctor]
+    recommendations: List[DoctorOut]
 
 
 class AgentSearchRequest(BaseModel):
@@ -349,4 +368,3 @@ class AgentSearchResponse(BaseModel):
     doctors: List[DoctorOut]
     total_results: int = Field(default=30)
     search_query: str
-

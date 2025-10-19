@@ -414,6 +414,7 @@ class BQDoctorService:
 
         selected = await rag_agent.get_recommended_doctors(request_data)
         return selected
+    
     def get_all_specialties(self):
         """
         Query BigQuery to get all distinct specialties from the doctor profiles table.
