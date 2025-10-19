@@ -4,9 +4,11 @@ from ...models.schemas import (SearchRequest, SearchResponse,
                                FrontendSearchRequest, FrontendSearchResponse,
                                VoiceSearchRequest, AgentSearchRequest,
                                AgentSearchResponse)
-from ...deps import get_bq, get_bq_doctor_service
+from ...deps import get_bq, get_bq_doctor_service, get_vector_search_service, get_gemini_client
 from ...services.mock_doctor_service import mock_doctor_service
 from app.services.bq_doctor_service import BQDoctorService
+from app.services.vertex_vector_search_service import VertexVectorSearchService
+from app.services.gemini_client import GeminiClient
 from google.cloud import bigquery
 
 router = APIRouter()
@@ -199,4 +201,77 @@ def get_insurance_plans():
     Endpoint: GET /api/v1/search/insurance-plans
     """
     return INSURANCE_PLANS
+
+
+@router.get("/diagnostics/vector-search")
+async def diagnostics_vector_search(
+    vector_search: VertexVectorSearchService = Depends(get_vector_search_service),
+    gemini: GeminiClient = Depends(get_gemini_client),
+):
+    """
+    Simple, read-only health check for Vertex AI Vector Search.
+    - Generates a known-good embedding using the configured embedding model
+    - Queries the deployed index with k=5
+    - Returns a concise summary for quick triage
+
+    Endpoint: GET /api/v1/search/diagnostics/vector-search
+    """
+    try:
+        dense_vector = gemini.generate_dense_embedding_single(
+            "Find a Obstetrics & Gynecology doctor in New York"
+        )
+        k = 5
+        results = await vector_search.search_dense(dense_vector, k=k, metadata_filters=None)
+
+        sample_ids = [r.get("npi") for r in results[:5]] if results else []
+        return {
+            "ok": True,
+            "vector_dim": len(dense_vector) if dense_vector else 0,
+            "k": k,
+            "num_results": len(results),
+            "sample_ids": sample_ids,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector search diagnostics failed: {e}")
+
+
+@router.get("/diagnostics/vector-search/index-consistency")
+async def diagnostics_index_consistency(
+    bq_service: BQDoctorService = Depends(get_bq_doctor_service),
+    vector_search: VertexVectorSearchService = Depends(get_vector_search_service),
+):
+    """
+    Cross-check a few NPIs from BigQuery against the deployed index using read_index_datapoints.
+
+    Returns each tested ID and whether it exists in the index, with vector dimension when available.
+    """
+    try:
+        doctors = bq_service.search_doctors(specialty=None, min_experience=None, has_certification=False, limit=5)
+        npi_ids = [str(d.get("npi")) for d in doctors if d.get("npi")] if doctors else []
+
+        results = await vector_search.diagnostics_read_index_datapoints(npi_ids)
+        return {
+            "ok": True,
+            "tested_ids": npi_ids,
+            "index_hits": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Index consistency diagnostics failed: {e}")
+
+
+@router.get("/diagnostics/vector-search/read")
+async def diagnostics_vector_read(
+    ids: str,
+    vector_search: VertexVectorSearchService = Depends(get_vector_search_service),
+):
+    """
+    Read specific datapoint IDs from the deployed index. Pass comma-separated IDs via `ids`.
+    Example: /api/v1/search/diagnostics/vector-search/read?ids=123,456
+    """
+    try:
+        id_list = [s.strip() for s in (ids or "").split(",") if s.strip()]
+        results = await vector_search.diagnostics_read_index_datapoints(id_list)
+        return {"ok": True, "tested_ids": id_list, "index_hits": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector read diagnostics failed: {e}")
 

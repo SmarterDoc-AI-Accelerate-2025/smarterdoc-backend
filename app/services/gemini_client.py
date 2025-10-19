@@ -2,6 +2,7 @@ import json
 import time
 from typing import List, Dict, Any, Tuple, Callable
 import re
+import inspect
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -74,6 +75,47 @@ def _clean_llm_artifacts(text: str) -> str:
     text = re.sub(r'INDEX_\d+', '', text, flags=re.IGNORECASE)
 
     return text.strip()
+
+
+def _create_function_declaration_from_callable(func: Callable) -> types.FunctionDeclaration:
+    """
+    Helper function to create a FunctionDeclaration from a Python callable.
+    Extracts function signature and creates appropriate Schema for parameters.
+    """
+    sig = inspect.signature(func)
+    func_name = func.__name__
+    func_doc = func.__doc__ or f"Function {func_name}"
+    
+    # Create schema for each parameter
+    properties = {}
+    for param_name, param in sig.parameters.items():
+        # Determine type from annotation
+        param_type = types.Type.STRING  # default
+        if param.annotation != inspect.Parameter.empty:
+            if param.annotation == float or param.annotation == int:
+                param_type = types.Type.NUMBER
+            elif param.annotation == str:
+                param_type = types.Type.STRING
+            elif param.annotation == bool:
+                param_type = types.Type.BOOLEAN
+        
+        properties[param_name] = types.Schema(
+            type=param_type,
+            description=f"Parameter {param_name}"
+        )
+    
+    # Create the parameters schema
+    parameters_schema = types.Schema(
+        type=types.Type.OBJECT,
+        properties=properties
+    )
+    
+    # Create and return the FunctionDeclaration
+    return types.FunctionDeclaration(
+        name=func_name,
+        description=func_doc.strip(),
+        parameters=parameters_schema
+    )
 
 
 class GeminiClient:
@@ -309,7 +351,9 @@ class GeminiClient:
         is the single step required.
         """
 
-        tool_config = [types.Tool.from_function(tool)]
+        # Create FunctionDeclaration from the callable
+        func_declaration = _create_function_declaration_from_callable(tool)
+        tool_config = [types.Tool(function_declarations=[func_declaration])]
 
         # 1. First Call: Ask the LLM to determine the tool arguments (weights)
 
@@ -333,8 +377,11 @@ class GeminiClient:
             f"User Query: {prompt}\nContext: {initial_context}", config)
 
         # Check for tool call in the response
-        if (response is None or not response.candidates
-                or not response.candidates[0].function_calls):
+        # Function calls are in response.candidates[0].content.parts[0].function_call
+        if (response is None or not response.candidates or 
+            not response.candidates[0].content or 
+            not response.candidates[0].content.parts or
+            not response.candidates[0].content.parts[0].function_call):
             logger.warning(
                 "LLM failed to call the ranking tool. Using default weights.")
             return {
@@ -342,7 +389,7 @@ class GeminiClient:
             }  # Use default weights
 
         # 2. Execute the Tool (Weight Generation)
-        function_call = response.candidates[0].function_calls[0]
+        function_call = response.candidates[0].content.parts[0].function_call
         args = dict(function_call.args)
 
         logger.info(f"LLM determined dynamic weights: {args}")
