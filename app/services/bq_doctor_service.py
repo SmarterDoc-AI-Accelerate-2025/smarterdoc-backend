@@ -6,6 +6,7 @@ import time
 from app.util.logging import logger
 import datetime
 import asyncio
+from app.models.schemas import DoctorOut
 
 
 class BQDoctorService:
@@ -13,9 +14,8 @@ class BQDoctorService:
     def __init__(self, client: bigquery.Client):
         self.client = client
         # Resolve project id robustly: prefer explicit BQ project, then global GCP project, then client project
-        project_id = (
-            settings.BQ_PROJECT or settings.GCP_PROJECT_ID or getattr(client, "project", None)
-        )
+        project_id = (settings.BQ_PROJECT or settings.GCP_PROJECT_ID
+                      or getattr(client, "project", None))
         if not project_id:
             try:
                 # Final fallback to ADC
@@ -412,9 +412,18 @@ class BQDoctorService:
             vector_search_service=vector_search_service_instance,
             gemini_client=gemini_client_instance)
 
+        fields_dict = DoctorOut.model_fields
+        DOCTOR_FIELDS = list(fields_dict.keys())
+
         selected = await rag_agent.get_recommended_doctors(request_data)
-        return selected
-    
+
+        cleaned_output = [{
+            key: doc.get(key)
+            for key in DOCTOR_FIELDS if key in doc
+        } for doc in selected]
+
+        return cleaned_output
+
     def get_all_specialties(self):
         """
         Query BigQuery to get all distinct specialties from the doctor profiles table.
@@ -427,10 +436,12 @@ class BQDoctorService:
           AND primary_specialty != ''
         ORDER BY primary_specialty ASC
         """
-        
+
         job = self.client.query(query)
         rows = list(job)
-        
+
         # Extract specialty strings from rows
-        specialties = [row.primary_specialty for row in rows if row.primary_specialty]
+        specialties = [
+            row.primary_specialty for row in rows if row.primary_specialty
+        ]
         return specialties
