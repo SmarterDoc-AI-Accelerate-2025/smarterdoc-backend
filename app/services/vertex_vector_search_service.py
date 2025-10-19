@@ -248,3 +248,43 @@ class VertexVectorSearchService:
         except Exception as e:
             logger.error(f"Dense Search execution failed. Error: {e}")
             return []
+
+    async def diagnostics_read_index_datapoints(self, ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        Diagnostic helper to verify whether specific IDs exist in the deployed index
+        and to inspect basic vector info for those datapoints.
+        """
+        if not ids:
+            return []
+
+        def _read_sync(deployed_id: str, id_list: List[str]):
+            return self.endpoint.read_index_datapoints(
+                deployed_index_id=deployed_id,
+                ids=id_list,
+            )
+
+        try:
+            loop = asyncio.get_event_loop()
+            datapoints = await loop.run_in_executor(
+                None,
+                _read_sync,
+                self.deployed_index_id,
+                ids,
+            )
+
+            results = []
+            for dp in datapoints:
+                try:
+                    dp_id = getattr(dp, "datapoint_id", None) or getattr(dp, "id", None)
+                    feature_vector = getattr(dp, "feature_vector", None)
+                    results.append({
+                        "id": str(dp_id) if dp_id is not None else None,
+                        "has_vector": bool(feature_vector),
+                        "vector_dim": len(feature_vector) if feature_vector else 0,
+                    })
+                except Exception:
+                    continue
+            return results
+        except Exception as e:
+            logger.error(f"Diagnostics read_index_datapoints failed: {e}")
+            return []

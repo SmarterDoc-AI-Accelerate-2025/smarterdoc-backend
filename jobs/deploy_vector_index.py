@@ -13,7 +13,7 @@ BUCKET_URI = "gs://smartdoc_vectors/"  # <-- GCS location of your JSONL files
 
 INDEX_DISPLAY_NAME = "docvec_profile_hybrid_index"
 DEPLOYED_INDEX_ID = "docvec_hybrid_deployed"  # Must be unique and contain only letters, numbers, or underscores
-VECTOR_DIMENSIONS = 768  # Must match your text-embedding-004 dimensions
+VECTOR_DIMENSIONS = 3072  # Must match your text-embedding-004 dimensions
 APPROXIMATE_NEIGHBORS = 100  # Tuning parameter
 
 # --- Initialize ---

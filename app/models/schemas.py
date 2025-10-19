@@ -322,14 +322,10 @@ class VoiceSearchRequest(BaseModel):
 class FinalRecommendedDoctor(BaseModel):
     """The final doctor profile with the score and LLM-generated reasoning."""
     npi: str
-    # first_name: str
-    # last_name: str
-    # final_weighted_score: float = Field(
-    #     description="The final score calculated by the Python ranker.")
-    # agent_reasoning_summary: str = Field(
-    #     description=
-    #     "The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
-    # )
+    agent_reasoning_summary: str = Field(
+        default="",
+        description="The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
+    )
 
 
 class FinalRecommendationList(BaseModel):

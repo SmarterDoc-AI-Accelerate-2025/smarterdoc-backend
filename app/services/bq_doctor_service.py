@@ -12,7 +12,26 @@ class BQDoctorService:
 
     def __init__(self, client: bigquery.Client):
         self.client = client
-        self.table = f"{settings.GCP_PROJECT_ID}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
+        # Resolve project id robustly: prefer explicit BQ project, then global GCP project, then client project
+        project_id = (
+            settings.BQ_PROJECT or settings.GCP_PROJECT_ID or getattr(client, "project", None)
+        )
+        if not project_id:
+            try:
+                # Final fallback to ADC
+                from google.auth import default as _google_auth_default
+                _, detected_project = _google_auth_default()
+                project_id = detected_project
+            except Exception:
+                project_id = None
+        # Update global settings if it was unset to avoid future None usage
+        if not settings.GCP_PROJECT_ID and project_id:
+            try:
+                # pydantic BaseSettings fields are mutable at runtime in this app
+                settings.GCP_PROJECT_ID = project_id  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        self.table = f"{project_id}.{settings.BQ_CURATED_DATASET}.{settings.BQ_PROFILES_TABLE}"
 
     def _ensure_list(self, v):
         if v is None: return []
@@ -332,7 +351,7 @@ class BQDoctorService:
                     hospitals,
                     ratings,
                     SAFE_CAST(latitude  AS FLOAT64)  AS latitude,
-                    SAFE_CAST(longitude AS FLOAT64)  AS longitude
+                    SAFE_CAST(longitude AS FLOAT64)  AS longitude,
                     address,                              
                     profile_picture_url
                 FROM DedupedFilteredDoctors

@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 from app.services.vertex_vector_search_service import VertexVectorSearchService  # Stage 1
 from app.services.gemini_client import GeminiClient  # LLM & Tool Orchestration
 from app.services.ranker import generate_ranking_weights, apply_personalized_reranking  # Stage 3 Tool
-from app.models.schemas import FinalRecommendedDoctor
+from app.models.schemas import FinalRecommendedDoctor, FinalRecommendationList
 from app.util.hospitals import HOSPITAL_TIERS
 from app.util.med_schools import MED_SCHOOL_TIERS
 from app.util.logging import logger
@@ -102,50 +102,43 @@ class RagAgentService:
             """
         justified_top_3_json_str = self.gemini_client.generate_structured_data(
             prompt=justification_prompt,
-            schema=List[FinalRecommendedDoctor].model_json_schema(
-            )  # Assuming schema is List of the full profile + reasoning
+            schema=FinalRecommendationList.model_json_schema()
         )
 
         # Parse the JSON string into Python objects
         try:
-            justified_top_3_doctors = FinalRecommendedDoctor.model_validate_json(
-                justified_top_3_json_str).model_dump()
-
-            if not isinstance(justified_top_3_doctors, list):
-                logger.error(
-                    "LLM Structured Output was not a list. Defaulting to empty list."
-                )
-                justified_top_3_doctors = []
+            result = FinalRecommendationList.model_validate_json(
+                justified_top_3_json_str)
+            justified_top_3_doctors = [doc.model_dump() for doc in result.recommendations]
         except Exception as e:
             logger.error(f"Failed to parse Top 3 JSON: {e}")
             justified_top_3_doctors = []
 
         # 6. FINAL RESPONSE ASSEMBLY
 
-        # Extract NPIs of the justified Top 3 to identify the remaining 27
+        # Extract NPIs of the justified Top 3
         top_3_npis = {doc.get('npi') for doc in justified_top_3_doctors}
 
-        # Filter out the justified doctors from the original sorted list (27 candidates remaining)
-        remaining_candidates = [
-            doc for doc in scored_candidates
-            if doc.get('npi') not in top_3_npis
-        ]
+        # Create a map of all scored candidates for easy lookup
+        scored_candidates_map = {doc.get('npi'): doc for doc in scored_candidates}
 
-        # Combine: Top 3 (with justification) + Remaining 27 (without justification)
-        # Note: We append the remaining candidates to maintain the scored order
-        final_ordered_recommendation_list = justified_top_3_doctors + remaining_candidates
-
-        unordered_full_profiles = await self.fetch_full_profiles_by_npi(
-            final_ordered_recommendation_list)
-
-        # 4. Convert list of dicts to a dict for fast O(1) lookup by NPI
-        # Ensure NPI is correctly cast to string if needed during key creation
-        profile_map = {doc['npi']: doc for doc in unordered_full_profiles}
-
-        # 5. Assemble the Final List in the Agent's Determined Order (length 30)
+        # Build the final ordered list:
+        # 1. Start with Top 3 (with agent_reasoning_summary)
+        # 2. Add remaining 27 from scored_candidates (maintaining score order)
         final_ordered_doctors = []
-        for npi in final_ordered_recommendation_list:
-            if npi in profile_map:
-                final_ordered_doctors.append(profile_map[npi])
+        
+        # Add Top 3 with LLM justification
+        for top_doc in justified_top_3_doctors:
+            npi = top_doc.get('npi')
+            if npi in scored_candidates_map:
+                # Merge the full profile data with the LLM's reasoning
+                full_doc = scored_candidates_map[npi].copy()
+                full_doc['agent_reasoning_summary'] = top_doc.get('agent_reasoning_summary', '')
+                final_ordered_doctors.append(full_doc)
+        
+        # Add remaining 27 doctors (without reasoning)
+        for doc in scored_candidates:
+            if doc.get('npi') not in top_3_npis:
+                final_ordered_doctors.append(doc)
 
         return final_ordered_doctors
