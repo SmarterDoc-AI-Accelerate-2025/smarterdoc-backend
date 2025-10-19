@@ -11,8 +11,8 @@ PROJECT_ID = settings.GCP_PROJECT_ID  # <-- Replace with your project ID
 REGION = "us-central1"  # <-- Replace with your region
 BUCKET_URI = "gs://smartdoc_vectors/"  # <-- GCS location of your JSONL files
 
-INDEX_DISPLAY_NAME = "doctor_vec_profile_index"
-DEPLOYED_INDEX_ID = "doctor_vec_deployed"  # Must be unique and contain only letters, numbers, or underscores
+INDEX_DISPLAY_NAME = "doctor_embedding_profile_index"
+DEPLOYED_INDEX_ID = "doctor_embedding_deployed"  # Must be unique and contain only letters, numbers, or underscores
 VECTOR_DIMENSIONS = 3072  # Must match your text-embedding-004 dimensions
 APPROXIMATE_NEIGHBORS = 100  # Tuning parameter
 
