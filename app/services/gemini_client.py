@@ -427,7 +427,10 @@ class GeminiClient:
 
         response = self._call_gemini_api(prompt, config)
 
-        if response is None or not response.candidates:
+        if (response is None or not response.candidates or 
+            not response.candidates[0].content or 
+            not response.candidates[0].content.parts or
+            not response.candidates[0].content.parts[0].text):
             return json.dumps({"recommendations": []})
 
         json_str = response.candidates[0].content.parts[0].text.strip()
