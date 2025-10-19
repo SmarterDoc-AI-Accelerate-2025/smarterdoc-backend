@@ -39,7 +39,7 @@ class RagAgentService:
 
         # Combine user_query and specialty_text for dense embedding search
         combined_query = f"{user_query} {specialty_text}".strip()
-        
+
         # Generate dense embedding for the combined query
         dense_query_vector = self.gemini_client.generate_dense_embedding_single(
             combined_query)
@@ -102,14 +102,15 @@ class RagAgentService:
             """
         justified_top_3_json_str = self.gemini_client.generate_structured_data(
             prompt=justification_prompt,
-            schema=FinalRecommendationList.model_json_schema()
-        )
+            schema=FinalRecommendationList.model_json_schema())
 
         # Parse the JSON string into Python objects
         try:
             result = FinalRecommendationList.model_validate_json(
                 justified_top_3_json_str)
-            justified_top_3_doctors = [doc.model_dump() for doc in result.recommendations]
+            justified_top_3_doctors = [
+                doc.model_dump() for doc in result.recommendations
+            ]
         except Exception as e:
             logger.error(f"Failed to parse Top 3 JSON: {e}")
             justified_top_3_doctors = []
@@ -120,22 +121,26 @@ class RagAgentService:
         top_3_npis = {doc.get('npi') for doc in justified_top_3_doctors}
 
         # Create a map of all scored candidates for easy lookup
-        scored_candidates_map = {doc.get('npi'): doc for doc in scored_candidates}
+        scored_candidates_map = {
+            doc.get('npi'): doc
+            for doc in scored_candidates
+        }
 
         # Build the final ordered list:
         # 1. Start with Top 3 (with agent_reasoning_summary)
         # 2. Add remaining 27 from scored_candidates (maintaining score order)
         final_ordered_doctors = []
-        
+
         # Add Top 3 with LLM justification
         for top_doc in justified_top_3_doctors:
             npi = top_doc.get('npi')
             if npi in scored_candidates_map:
                 # Merge the full profile data with the LLM's reasoning
                 full_doc = scored_candidates_map[npi].copy()
-                full_doc['agent_reasoning_summary'] = top_doc.get('agent_reasoning_summary', '')
+                full_doc['agent_reasoning_summary'] = top_doc.get(
+                    'agent_reasoning_summary', '')
                 final_ordered_doctors.append(full_doc)
-        
+
         # Add remaining 27 doctors (without reasoning)
         for doc in scored_candidates:
             if doc.get('npi') not in top_3_npis:
