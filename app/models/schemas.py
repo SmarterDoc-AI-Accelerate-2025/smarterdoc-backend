@@ -340,16 +340,28 @@ class FinalRecommendedDoctor(BaseModel):
     final_weighted_score: Optional[float] = None
     feature_scores: Optional[float] = None
     semantic_similarity_score: Optional[float] = None
+    # agent_reasoning_summary: str = Field(
+    #     default="",
+    #     description=
+    #     "The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
+    # )
+
+
+class JustifiedDoctorOut(DoctorOut):
+    # Inherits all fields from DoctorOut
+    final_weighted_score: Optional[float] = None
+    feature_scores: Optional[float] = None
+    semantic_similarity_score: Optional[float] = None
     agent_reasoning_summary: str = Field(
         default="",
         description=
-        "The LLM-generated, concise justification (max 5 sentences) for why this doctor was selected."
+        "The model-generated, concise justification (max 5 sentences) for why this doctor was selected."
     )
 
 
 class FinalRecommendationList(BaseModel):
     """The container for the structured list of Top 3 doctors returned by the RAG Agent."""
-    recommendations: List[DoctorOut]
+    recommendations: List[JustifiedDoctorOut]
 
 
 class AgentSearchRequest(BaseModel):

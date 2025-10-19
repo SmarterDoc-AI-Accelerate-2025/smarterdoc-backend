@@ -71,7 +71,7 @@ class RagAgentService:
 
         weights = weight_generation_result.get(
             'tool_output')  # This is the Dict of weights
-
+        logger.info(f"=======Agent weights: {weights}")
         # 3. STAGE 3: Personalized Reranking (Python Logic)
 
         # Apply the LLM-generated weights to the actual doctor data
@@ -79,30 +79,29 @@ class RagAgentService:
             candidates=candidates_30, weights=weights)
         # top_3_doctors = apply_personalized_reranking(candidates=candidates_30,
         #                                              weights=weights)
+        logger.info(f"=======Agent scored candidates: {scored_candidates[:3]}")
 
-        # 4. STAGE 4: RAG Generation (Synthesis & Justification)
-        top_10_for_justification = scored_candidates[:10]
         # Grounding prompt for the LLM to explain its selection
         justification_prompt = f"""
             You are the final decision-maker. Your task is to select the absolute Top 3 best doctors 
             from the candidates provided below. Use the 'final_weighted_score' as a strong guide, 
             but also use the doctors' BIO and SUMMARY fields to ensure the choice is compassionate, 
-            nuanced, and justified. The decision must consider the user query (user may specifically ask for certain qualities).
+            nuanced, and justified. The decision must consider the user query (user may specifically ask for certain qualities)
+            pay attention to technical medical conditions or keywords in the query.
             
             For EACH of the final Top 3 selected, provide a justification 
             explaining WHY they were chosen (e.g., "Chosen due to high score AND testimonial summary 
             praising bedside manner for complex cases").
             
-            CANDIDATES (Scored, Top 10): {top_10_for_justification}
+            CANDIDATES (Scored, Top 30): {scored_candidates}
             User's Original Query: {user_query}
             
             FORMAT REQUIREMENT:
-            Return the final JSON list of the Top 3 doctors npis, ensuring each object contains 
+             Return the final JSON list of the Top 3 doctors profiles, ensuring each object contains 
             a new field: 'agent_reasoning_summary' with your justification.
             """
         justified_top_3_json_str = self.gemini_client.generate_structured_data(
-            prompt=justification_prompt,
-            schema=FinalRecommendationList.model_json_schema())
+            prompt=justification_prompt, schema=FinalRecommendationList)
 
         # Parse the JSON string into Python objects
         try:
@@ -111,39 +110,18 @@ class RagAgentService:
             justified_top_3_doctors = [
                 doc.model_dump() for doc in result.recommendations
             ]
+            logger.info(
+                f"=====DEBUG CHECK: Top 3 doctors list (should include extra fields): {justified_top_3_doctors}"
+            )
         except Exception as e:
             logger.error(f"Failed to parse Top 3 JSON: {e}")
             justified_top_3_doctors = []
 
-        # 6. FINAL RESPONSE ASSEMBLY
-
-        # Extract NPIs of the justified Top 3
-        top_3_npis = {doc.get('npi') for doc in justified_top_3_doctors}
-
-        # Create a map of all scored candidates for easy lookup
-        scored_candidates_map = {
-            doc.get('npi'): doc
-            for doc in scored_candidates
-        }
-
-        # Build the final ordered list:
-        # 1. Start with Top 3 (with agent_reasoning_summary)
-        # 2. Add remaining 27 from scored_candidates (maintaining score order)
-        final_ordered_doctors = []
-
-        # Add Top 3 with LLM justification
-        for top_doc in justified_top_3_doctors:
-            npi = top_doc.get('npi')
-            if npi in scored_candidates_map:
-                # Merge the full profile data with the LLM's reasoning
-                full_doc = scored_candidates_map[npi].copy()
-                full_doc['agent_reasoning_summary'] = top_doc.get(
-                    'agent_reasoning_summary', '')
-                final_ordered_doctors.append(full_doc)
-
-        # Add remaining 27 doctors (without reasoning)
-        for doc in scored_candidates:
-            if doc.get('npi') not in top_3_npis:
-                final_ordered_doctors.append(doc)
-
-        return final_ordered_doctors
+        top_3_npis = set(j.get('npi') for j in justified_top_3_doctors)
+        rest_27_filtered = list(
+            filter(lambda x: x.get('npi') not in top_3_npis,
+                   scored_candidates))
+        logger.info(
+            f"===== CHECK REST 27 FILTERED FIELDS, {list(rest_27_filtered[0].keys())}"
+        )
+        return justified_top_3_doctors + rest_27_filtered
