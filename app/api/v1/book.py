@@ -1,6 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from typing import List
-import httpx
 from ...models.schemas import (
     AppointmentRequest, 
     AppointmentResponse,
@@ -14,8 +13,26 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def get_public_url(request: Request) -> str:
+    """
+    Get the public URL for this server.
+    Uses X-Forwarded-Host header if available (for ngrok/Cloud Run).
+    """
+    # Check for forwarded host (ngrok, Cloud Run, etc.)
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+    
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}"
+    
+    # Fallback to request host
+    host = request.headers.get("host", "localhost:8080")
+    scheme = "https" if "443" in host else "http"
+    return f"{scheme}://{host}"
+
+
 @router.post("/appointments", response_model=AppointmentResponse)
-async def create_appointment(req: AppointmentRequest):
+async def create_appointment(req: AppointmentRequest, request: Request):
     """
     Create appointments by calling doctors sequentially.
     For each doctor in the list, initiate a phone call to book an appointment.
@@ -60,9 +77,6 @@ async def create_appointment(req: AppointmentRequest):
     # Fixed phone number for all appointment calls
     to_number = "+12019325000"
     
-    # Base URL for internal API calls - use environment variable or default to localhost
-    base_url = settings.APP_BASE_URL or "http://localhost:8080"
-    
     for doctor in req.doctors:
         try:
             # Construct system instruction with appointment details
@@ -91,23 +105,22 @@ async def create_appointment(req: AppointmentRequest):
             logger.info(f"Initiating call to {to_number} for {doctor.name}")
             logger.info(f"System instruction length: {len(system_instruction)} chars")
             
-            # Use telephony API's /call endpoint with system_instruction parameter
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                call_payload = {
-                    "to": to_number,
-                    "system_instruction": system_instruction,
-                    "voice": settings.VERTEX_LIVE_VOICE
-                }
-                
-                response = await client.post(
-                    f"{base_url}/api/v1/telephony/call",
-                    json=call_payload
-                )
-                response.raise_for_status()
-                result = response.json()
+            # Get public URL for TwiML callback
+            public_url = get_public_url(request)
             
-            # Extract call_sid from response
-            call_sid = result.get("call_sid")
+            # Build TwiML URL with system instruction as query parameter
+            from urllib.parse import quote
+            twiml_url = f"{public_url}/api/v1/telephony/twiml?instruction={quote(system_instruction)}&voice={settings.VERTEX_LIVE_VOICE}"
+            
+            # Call Twilio service directly
+            result = twilio_service.initiate_call(
+                to_number=to_number,
+                twiml_url=twiml_url,
+                from_number=None  # Use default Twilio number
+            )
+            
+            # Extract call_sid from result
+            call_sid = result.get("sid")
             
             call_results.append(AppointmentCallResult(
                 doctor_name=doctor.name,
