@@ -18,16 +18,37 @@ def get_public_url(request: Request) -> str:
     """
     Get the public URL for this server.
     Uses X-Forwarded-Host header if available (for ngrok/Cloud Run).
+    For local development, uses localhost.
     """
     # Check for forwarded host (ngrok, Cloud Run, etc.)
     forwarded_host = request.headers.get("x-forwarded-host")
     forwarded_proto = request.headers.get("x-forwarded-proto", "https")
     
     if forwarded_host:
+        # For ngrok, use the forwarded host with https
+        if "ngrok" in forwarded_host or "ngrok-free" in forwarded_host:
+            return f"https://{forwarded_host}"
+        # For Cloud Run, always use https
+        if ".run.app" in forwarded_host:
+            return f"https://{forwarded_host}"
         return f"{forwarded_proto}://{forwarded_host}"
     
     # Fallback to request host
     host = request.headers.get("host", "localhost:8080")
+    
+    # For ngrok domains, always use https
+    if "ngrok" in host or "ngrok-free" in host:
+        return f"https://{host}"
+    
+    # For local development, use localhost
+    if "localhost" in host or "127.0.0.1" in host:
+        return f"http://localhost:8080"
+    
+    # For Cloud Run domains, always use https
+    if ".run.app" in host:
+        return f"https://{host}"
+    
+    # Default scheme detection
     scheme = "https" if "443" in host else "http"
     return f"{scheme}://{host}"
 
@@ -108,9 +129,11 @@ async def create_appointment(req: AppointmentRequest, request: Request):
             
             # Get public URL for internal API call
             public_url = get_public_url(request)
+            logger.info(f"Public URL: {public_url}")
             
             # Call the /call API instead of direct Twilio service
             call_api_url = f"{public_url}/api/v1/telephony/call"
+            logger.info(f"Call API URL: {call_api_url}")
             
             call_payload = {
                 "to": to_number,
@@ -119,13 +142,31 @@ async def create_appointment(req: AppointmentRequest, request: Request):
             }
             
             # Make HTTP request to /call API
+            # Add ngrok headers to simulate external request
+            headers = {
+                "Content-Type": "application/json",
+                "x-forwarded-host": "corrina-nonfederated-gabriele.ngrok-free.dev",
+                "x-forwarded-proto": "https"
+            }
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     call_api_url,
                     json=call_payload,
+                    headers=headers,
                     timeout=30.0
                 )
-                response.raise_for_status()
+                
+                logger.info(f"HTTP Response Status: {response.status_code}")
+                logger.info(f"HTTP Response Headers: {dict(response.headers)}")
+                
+                if response.status_code != 200:
+                    logger.error(f"HTTP Error {response.status_code}: {response.text}")
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Call API returned {response.status_code}: {response.text}"
+                    )
+                
                 result = response.json()
             
             # Extract call_sid from API response
