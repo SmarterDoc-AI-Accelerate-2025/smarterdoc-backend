@@ -189,7 +189,7 @@ def get_specialties_from_bigquery(bq: bigquery.Client = Depends(get_bq)):
         return specialties
     except Exception as e:
         print("Error fetching specialties from BigQuery:", e)
-        raise HTTPException(status_code=500, 
+        raise HTTPException(status_code=500,
                           detail=f"Failed to fetch specialties from database: {str(e)}")
 
 
@@ -274,4 +274,5 @@ async def diagnostics_vector_read(
         return {"ok": True, "tested_ids": id_list, "index_hits": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Vector read diagnostics failed: {e}")
+
 
