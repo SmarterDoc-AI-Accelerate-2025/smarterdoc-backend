@@ -7,6 +7,7 @@ from ...models.schemas import (
 )
 from ...services.telephony import get_twilio_service
 from ...config import settings
+from urllib.parse import urlparse
 import logging
 import httpx
 
@@ -142,12 +143,14 @@ async def create_appointment(req: AppointmentRequest, request: Request):
             }
             
             # Make HTTP request to /call API
-            # Add ngrok headers to simulate external request
-            headers = {
-                "Content-Type": "application/json",
-                "x-forwarded-host": "corrina-nonfederated-gabriele.ngrok-free.dev",
-                "x-forwarded-proto": "https"
-            }
+            # Dev-only: add ngrok forwarded headers IF NGROK_URL is configured
+            headers = {"Content-Type": "application/json"}
+            if getattr(settings, "NGROK_URL", None):
+                parsed = urlparse(settings.NGROK_URL)
+                if parsed.scheme and parsed.netloc:
+                    headers["x-forwarded-proto"] = parsed.scheme
+                    headers["x-forwarded-host"] = parsed.netloc
+                    logger.info(f"Injected forwarded headers for ngrok: proto={parsed.scheme}, host={parsed.netloc}")
             
             async with httpx.AsyncClient() as client:
                 response = await client.post(
