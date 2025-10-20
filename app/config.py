@@ -81,8 +81,8 @@ class Settings(BaseSettings):
     # ============================================
     # Vertex AI Live API Configuration
     # ============================================
-    # Live API 支持的模型：models/gemini-2.0-flash-exp 或 models/gemini-1.5-flash
-    VERTEX_LIVE_MODEL: str = "models/gemini-2.0-flash-live-preview-04-09"  # Live API 专用模型
+    # Live API supported models: e.g., models/gemini-2.0-flash-live-preview-04-09
+    VERTEX_LIVE_MODEL: str = "models/gemini-2.0-flash-live-preview-04-09"  # Live API model
     VERTEX_LIVE_VOICE: str = "Puck"  # 可选: Puck, Charon, Kore, Fenrir, Aoede
     VERTEX_LIVE_SYSTEM_INSTRUCTION: str = """You are SmarterDoc Agent, a virtual assistant that helps patients schedule appointments with doctors.
 
