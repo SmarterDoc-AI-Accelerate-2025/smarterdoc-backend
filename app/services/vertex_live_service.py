@@ -52,12 +52,21 @@ class VertexLiveSession:
         self.client = genai.Client(
             vertexai=True,
             project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_REGION,
+            location=getattr(settings, 'VERTEX_LIVE_REGION', settings.GCP_REGION),
         )
         
         self.session = None
         self._is_connected = False
         
+        # Warn if model doesn't look like a Live API model
+        try:
+            if isinstance(self.model, str) and "live" not in self.model:
+                logger.warning(
+                    f"Configured Vertex Live model '{self.model}' may not be a Live API model. "
+                    "Use a Live model like 'models/gemini-2.0-flash-live-preview-04-09'."
+                )
+        except Exception:
+            pass
         logger.info(f"Initialized Vertex Live session config - Model: {self.model}, Voice: {self.voice}")
     
     def _build_config(self) -> LiveConnectConfig:
@@ -120,10 +129,21 @@ class VertexLiveSession:
         """
         try:
             config = self._build_config()
+
+            # Normalize model id for genai live.connect (remove any resource prefix like 'models/')
+            model_id = self.model.split("/")[-1] if isinstance(self.model, str) else self.model
+
+            # Log connection context for diagnostics
+            project_id = getattr(settings, 'GCP_PROJECT_ID', None)
+            location = getattr(settings, 'VERTEX_LIVE_REGION', getattr(settings, 'GCP_REGION', None))
+            logger.info(
+                f"Vertex Live connect context - project: {project_id}, location: {location}, "
+                f"model: {model_id}, voice: {self.voice}"
+            )
             
             # Connect to Live API (returns async context manager)
             context_manager = self.client.aio.live.connect(
-                model=self.model,
+                model=model_id,
                 config=config
             )
             

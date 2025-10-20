@@ -74,13 +74,18 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_NUMBER: str | None = None
+    
+    # ngrok URL for local development (override for WebSocket connections)
+    NGROK_URL: str | None = None
 
     # ============================================
     # Vertex AI Live API Configuration
     # ============================================
-    # Live API 支持的模型：models/gemini-2.0-flash-exp 或 models/gemini-1.5-flash
-    VERTEX_LIVE_MODEL: str = "models/gemini-2.0-flash-live-preview-04-09"  # Live API 专用模型
+    # Live API supported models: e.g., gemini-2.0-flash-live-preview-04-09 (no prefix)
+    VERTEX_LIVE_MODEL: str = "gemini-2.0-flash-live-preview-04-09"  # Live API model
     VERTEX_LIVE_VOICE: str = "Puck"  # 可选: Puck, Charon, Kore, Fenrir, Aoede
+    # 独立于 Cloud Run 区域的 Live API 区域（目前 Live 通常在 us-central1）
+    VERTEX_LIVE_REGION: str = "us-central1"
     VERTEX_LIVE_SYSTEM_INSTRUCTION: str = """You are SmarterDoc Agent, a virtual assistant that helps patients schedule appointments with doctors.
 
 When you speak to a doctor, you should always be polite and respectful.
