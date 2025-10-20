@@ -81,9 +81,11 @@ class Settings(BaseSettings):
     # ============================================
     # Vertex AI Live API Configuration
     # ============================================
-    # Live API supported models: e.g., models/gemini-2.0-flash-live-preview-04-09
-    VERTEX_LIVE_MODEL: str = "models/gemini-2.0-flash-live-preview-04-09"  # Live API model
+    # Live API supported models: e.g., gemini-2.0-flash-live-preview-04-09 (no prefix)
+    VERTEX_LIVE_MODEL: str = "gemini-2.0-flash-live-preview-04-09"  # Live API model
     VERTEX_LIVE_VOICE: str = "Puck"  # 可选: Puck, Charon, Kore, Fenrir, Aoede
+    # 独立于 Cloud Run 区域的 Live API 区域（目前 Live 通常在 us-central1）
+    VERTEX_LIVE_REGION: str = "us-central1"
     VERTEX_LIVE_SYSTEM_INSTRUCTION: str = """You are SmarterDoc Agent, a virtual assistant that helps patients schedule appointments with doctors.
 
 When you speak to a doctor, you should always be polite and respectful.
