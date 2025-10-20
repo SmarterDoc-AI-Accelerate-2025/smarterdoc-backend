@@ -577,6 +577,7 @@ async def health_check():
         "twilio_configured": twilio_service.is_configured(),
         "vertex_model": settings.VERTEX_LIVE_MODEL,
         "vertex_voice": settings.VERTEX_LIVE_VOICE,
+        "vertex_live_region": getattr(settings, 'VERTEX_LIVE_REGION', settings.GCP_REGION),
     }
 
 
