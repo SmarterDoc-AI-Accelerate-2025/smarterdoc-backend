@@ -55,6 +55,7 @@ jobs:
           --max-instances 3 \
           --set-env-vars BQ_PROJECT=${{ secrets.BQ_PROJECT }} \
           --set-env-vars GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
+          --set-env-vars GCP_REGION=${{ secrets.REGION }} \
           --set-env-vars BQ_CURATED_DATASET=curated \
           --set-env-vars BQ_RAW_DATASET=gcs_npi_staging \
           --set-env-vars BQ_RAW_TABLE=npi_doctors_row \
@@ -67,4 +68,6 @@ jobs:
           --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
           --set-env-vars VERTEX_LIVE_MODEL=models/gemini-2.0-flash-exp \
           --set-env-vars VERTEX_LIVE_VOICE=Puck \
+          --set-env-vars ENVIRONMENT=prod \
+          --clear-env-vars NGROK_URL \
           --quiet
