@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from typing import List, Dict, Any
 from app.services.vertex_vector_search_service import VertexVectorSearchService  # Stage 1
 from app.services.gemini_client import GeminiClient  # LLM & Tool Orchestration
@@ -51,6 +52,11 @@ class RagAgentService:
             k=30,
             metadata_filters=metadata_filters)
 
+        if dense_query_vector is None:
+            logger.error("Embedding generation failed and returned None.")
+            # Fallback to empty list or raise a specific error
+            raise HTTPException(status_code=503,
+                                detail="Embedding Service Failed.")
         if not candidates_30:
             return []
 

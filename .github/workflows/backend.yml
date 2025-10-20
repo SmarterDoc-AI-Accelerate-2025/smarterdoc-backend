@@ -2,67 +2,68 @@ name: Deploy Backend to Cloud Run
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # Authenticate to GCP
-    - name: Authenticate to GCP
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+      # Authenticate to GCP
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-    # Configure Docker for Artifact Registry
-    - name: Configure Docker for Artifact Registry
-      run: |
-        gcloud auth configure-docker gcr.io --quiet
+      # Configure Docker for Artifact Registry
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker gcr.io --quiet
 
-    # Build Docker image
-    - name: Build Docker Image
-      run: |
-        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend .
+      # Build Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend .
 
-    # Push Docker image
-    - name: Push Docker Image
-      run: |
-        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend
+      # Push Docker image
+      - name: Push Docker Image
+        run: |
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend
 
-    # Deploy to Cloud Run with better configuration
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy smarterdoc-backend \
-          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend \
-          --platform managed \
-          --region ${{ secrets.REGION }} \
-          --allow-unauthenticated \
-          --port 8080 \
-          --memory 1Gi \
-          --cpu 1 \
-          --timeout 300s \
-          --concurrency 80 \
-          --min-instances 0 \
-          --max-instances 3 \
-          --set-env-vars BQ_PROJECT=${{ secrets.BQ_PROJECT }} \
-          --set-env-vars GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
-          --set-env-vars BQ_CURATED_DATASET=curated \
-          --set-env-vars BQ_RAW_DATASET=gcs_npi_staging \
-          --set-env-vars BQ_RAW_TABLE=npi_doctors_row \
-          --set-env-vars BQ_PROFILES_TABLE=doctor_profiles \
-          --set-env-vars BQ_GEO_CACHE_TABLE=_geocode_cache \
-          --set-env-vars BQ_GEO_INPUT_TABLE=_geocode_input \
-          --set-env-vars TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} \
-          --set-env-vars TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} \
-          --set-env-vars TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} \
-          --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
-          --quiet
+      # Deploy to Cloud Run with better configuration
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy smarterdoc-backend \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/smarterdoc-backend \
+            --platform managed \
+            --region ${{ secrets.REGION }} \
+            --allow-unauthenticated \
+            --port 8080 \
+            --memory 1Gi \
+            --cpu 1 \
+            --timeout 300s \
+            --concurrency 80 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --set-env-vars BQ_PROJECT=${{ secrets.BQ_PROJECT }} \
+            --set-env-vars GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
+            --set-env-vars BQ_CURATED_DATASET=curated \
+            --set-env-vars BQ_RAW_DATASET=gcs_npi_staging \
+            --set-env-vars BQ_RAW_TABLE=npi_doctors_row \
+            --set-env-vars BQ_PROFILES_TABLE=doctor_profiles \
+            --set-env-vars BQ_GEO_CACHE_TABLE=_geocode_cache \
+            --set-env-vars BQ_GEO_INPUT_TABLE=_geocode_input \
+            --set-env-vars VECTOR_SEARCH_ENDPOINT_NAME=${{ secrets.VECTOR_SEARCH_ENDPOINT_NAME }}\
+            --set-env-vars TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} \
+            --set-env-vars TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} \
+            --set-env-vars TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} \
+            --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
+            --quiet
