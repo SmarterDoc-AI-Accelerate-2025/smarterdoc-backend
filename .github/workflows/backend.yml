@@ -69,5 +69,4 @@ jobs:
           --set-env-vars VERTEX_LIVE_MODEL=models/gemini-2.0-flash-exp \
           --set-env-vars VERTEX_LIVE_VOICE=Puck \
           --set-env-vars ENVIRONMENT=prod \
-          --clear-env-vars NGROK_URL \
           --quiet
