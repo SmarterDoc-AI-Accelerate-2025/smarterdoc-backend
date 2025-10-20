@@ -58,6 +58,15 @@ class VertexLiveSession:
         self.session = None
         self._is_connected = False
         
+        # Warn if model doesn't look like a Live API model
+        try:
+            if isinstance(self.model, str) and "live" not in self.model:
+                logger.warning(
+                    f"Configured Vertex Live model '{self.model}' may not be a Live API model. "
+                    "Use a Live model like 'models/gemini-2.0-flash-live-preview-04-09'."
+                )
+        except Exception:
+            pass
         logger.info(f"Initialized Vertex Live session config - Model: {self.model}, Voice: {self.voice}")
     
     def _build_config(self) -> LiveConnectConfig:
