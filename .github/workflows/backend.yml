@@ -65,4 +65,6 @@ jobs:
           --set-env-vars TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} \
           --set-env-vars TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} \
           --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
+          --set-env-vars VERTEX_LIVE_MODEL=models/gemini-2.0-flash-exp \
+          --set-env-vars VERTEX_LIVE_VOICE=Puck \
           --quiet
