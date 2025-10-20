@@ -77,7 +77,8 @@ def _clean_llm_artifacts(text: str) -> str:
     return text.strip()
 
 
-def _create_function_declaration_from_callable(func: Callable) -> types.FunctionDeclaration:
+def _create_function_declaration_from_callable(
+        func: Callable) -> types.FunctionDeclaration:
     """
     Helper function to create a FunctionDeclaration from a Python callable.
     Extracts function signature and creates appropriate Schema for parameters.
@@ -85,7 +86,7 @@ def _create_function_declaration_from_callable(func: Callable) -> types.Function
     sig = inspect.signature(func)
     func_name = func.__name__
     func_doc = func.__doc__ or f"Function {func_name}"
-    
+
     # Create schema for each parameter
     properties = {}
     for param_name, param in sig.parameters.items():
@@ -98,24 +99,18 @@ def _create_function_declaration_from_callable(func: Callable) -> types.Function
                 param_type = types.Type.STRING
             elif param.annotation == bool:
                 param_type = types.Type.BOOLEAN
-        
+
         properties[param_name] = types.Schema(
-            type=param_type,
-            description=f"Parameter {param_name}"
-        )
-    
+            type=param_type, description=f"Parameter {param_name}")
+
     # Create the parameters schema
-    parameters_schema = types.Schema(
-        type=types.Type.OBJECT,
-        properties=properties
-    )
-    
+    parameters_schema = types.Schema(type=types.Type.OBJECT,
+                                     properties=properties)
+
     # Create and return the FunctionDeclaration
-    return types.FunctionDeclaration(
-        name=func_name,
-        description=func_doc.strip(),
-        parameters=parameters_schema
-    )
+    return types.FunctionDeclaration(name=func_name,
+                                     description=func_doc.strip(),
+                                     parameters=parameters_schema)
 
 
 class GeminiClient:
@@ -325,16 +320,17 @@ class GeminiClient:
             return [0.0] * self.EMBEDDING_DIMENSION
 
         # 1. Call the batch method: Returns List[List[float]]
-        list_of_vectors = self.generate_embedding([text],
-                                                  task_type="RETRIEVAL_QUERY")
+        try:
+            list_of_vectors = self.generate_embedding(
+                [text], task_type="RETRIEVAL_QUERY")
+            # 2. Extract the single inner list: Returns List[float]
+            if list_of_vectors and isinstance(list_of_vectors[0], list):
+                # Successfully extracted the single vector
+                return list_of_vectors[0]
 
-        # 2. Extract the single inner list: Returns List[float]
-        if list_of_vectors and isinstance(list_of_vectors[0], list):
-            # Successfully extracted the single vector
-            return list_of_vectors[0]
-
-        # Handle unexpected empty or malformed result
-        return [0.0] * self.EMBEDDING_DIMENSION
+        except Exception as e:
+            logger.error(f"Gemini Embeddings API call failed. Error: {e}")
+            return [0.0] * self.EMBEDDING_DIMENSION
 
     async def generate_content_with_tool(
             self,
@@ -378,10 +374,10 @@ class GeminiClient:
 
         # Check for tool call in the response
         # Function calls are in response.candidates[0].content.parts[0].function_call
-        if (response is None or not response.candidates or 
-            not response.candidates[0].content or 
-            not response.candidates[0].content.parts or
-            not response.candidates[0].content.parts[0].function_call):
+        if (response is None or not response.candidates
+                or not response.candidates[0].content
+                or not response.candidates[0].content.parts
+                or not response.candidates[0].content.parts[0].function_call):
             logger.warning(
                 "LLM failed to call the ranking tool. Using default weights.")
             return {
@@ -427,10 +423,10 @@ class GeminiClient:
 
         response = self._call_gemini_api(prompt, config)
 
-        if (response is None or not response.candidates or 
-            not response.candidates[0].content or 
-            not response.candidates[0].content.parts or
-            not response.candidates[0].content.parts[0].text):
+        if (response is None or not response.candidates
+                or not response.candidates[0].content
+                or not response.candidates[0].content.parts
+                or not response.candidates[0].content.parts[0].text):
             return json.dumps({"recommendations": []})
 
         json_str = response.candidates[0].content.parts[0].text.strip()
