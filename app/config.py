@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_NUMBER: str | None = None
+    
+    # ngrok URL for local development (override for WebSocket connections)
+    NGROK_URL: str | None = None
 
     # ============================================
     # Vertex AI Live API Configuration
