@@ -66,5 +66,6 @@ jobs:
             --set-env-vars TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} \
             --set-env-vars TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} \
             --set-env-vars TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} \
+            --set-env-vars APPOINTMENT_PHONE_NUMBER=${{ secrets.APPOINTMENT_PHONE_NUMBER }} \
             --set-env-vars APP_BASE_URL=https://smarterdoc-backend-${{ secrets.GCP_PROJECT_ID }}.${{ secrets.REGION }}.run.app \
             --quiet
