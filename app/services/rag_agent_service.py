@@ -142,21 +142,20 @@ class RagAgentService:
             f"===== CHECK REST 27 FILTERED FIELDS, {list(rest_27_filtered[0].keys()) if rest_27_filtered else 'No rest candidates'}"
         )
         
-        # Fetch full doctor data from BQ for top 3 NPIs
+        # Extract top 3 doctors from scored_candidates and add reasoning
         top_3_full_data = []
         if top_3_npis:
-            # Import BQ service here to avoid circular imports
-            from app.deps import get_bq_doctor_service
-            bq_service = get_bq_doctor_service()
-            top_3_full_data = await bq_service.fetch_full_profiles_by_npi(top_3_npis)
-            
-            # Add reasoning to top 3 doctors
-            for doctor in top_3_full_data:
-                npi = doctor.get('npi')
-                if npi in top_3_reasoning:
-                    doctor['agent_reasoning_summary'] = top_3_reasoning[npi]
+            # Find the top 3 doctors in scored_candidates by NPI
+            for candidate in scored_candidates:
+                if candidate.get('npi') in top_3_npis:
+                    # Create a copy and add reasoning
+                    doctor_with_reasoning = candidate.copy()
+                    npi = doctor_with_reasoning.get('npi')
+                    if npi in top_3_reasoning:
+                        doctor_with_reasoning['agent_reasoning_summary'] = top_3_reasoning[npi]
+                    top_3_full_data.append(doctor_with_reasoning)
 
-        # Combine top 3 with full data and rest candidates
+        # Combine top 3 with reasoning and rest candidates
         final_result = top_3_full_data + rest_27_filtered
         
         logger.info(f"===== Final result: {len(final_result)} doctors (top 3 with reasoning + rest 27)")
