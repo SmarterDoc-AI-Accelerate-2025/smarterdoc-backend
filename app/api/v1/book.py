@@ -97,8 +97,8 @@ async def create_appointment(req: AppointmentRequest, request: Request):
         )
     
     # Real Twilio calls using /call API
-    # Fixed phone number for all appointment calls
-    to_number = "+12019325000"
+    # Get phone number from configuration
+    to_number = settings.APPOINTMENT_PHONE_NUMBER
     
     for doctor in req.doctors:
         try:
