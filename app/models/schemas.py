@@ -359,6 +359,19 @@ class JustifiedDoctorOut(DoctorOut):
     )
 
 
+class Top3NPIWithReasoning(BaseModel):
+    """Schema for top 3 NPI selection with reasoning."""
+    npi: str = Field(description="The NPI of the selected doctor")
+    agent_reasoning_summary: str = Field(
+        description="The LLM-generated justification for why this doctor was selected"
+    )
+
+
+class Top3SelectionResult(BaseModel):
+    """The container for the top 3 NPI selection result."""
+    top_3_selections: List[Top3NPIWithReasoning]
+
+
 class FinalRecommendationList(BaseModel):
     """The container for the structured list of Top 3 doctors returned by the RAG Agent."""
     recommendations: List[JustifiedDoctorOut]
