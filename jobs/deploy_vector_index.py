@@ -7,8 +7,8 @@ PROJECT_ID = settings.GCP_PROJECT_ID  # <-- Replace with your project ID
 REGION = "us-central1"  # <-- Replace with your region
 BUCKET_URI = "gs://smartdoc_vectors/"  # <-- GCS location of your JSONL files
 
-INDEX_DISPLAY_NAME = "doctor_embedding_profile_index"
-DEPLOYED_INDEX_ID = "doctor_embedding_deployed"  # Must be unique and contain only letters, numbers, or underscores
+INDEX_DISPLAY_NAME = "doc_embedding_profile_index"
+DEPLOYED_INDEX_ID = "doc_embedding_deployed"  # Must be unique and contain only letters, numbers, or underscores
 VECTOR_DIMENSIONS = 3072  # Must match your text-embedding-004 dimensions
 APPROXIMATE_NEIGHBORS = 100  # Tuning parameter
 
@@ -40,6 +40,7 @@ def create_index():
         contents_delta_uri=BUCKET_URI,
         dimensions=VECTOR_DIMENSIONS,  # The key change: specify 3072
         approximate_neighbors_count=APPROXIMATE_NEIGHBORS,
+        shard_size="SHARD_SIZE_SMALL",
         distance_measure_type=
         "COSINE_DISTANCE",  # or DOT_PRODUCT_DISTANCE, based on your vectors
         # Sparse configuration (like embedding_config.sparse_embedding_config) MUST be omitted.
@@ -85,7 +86,7 @@ def deploy_index(index: aiplatform.MatchingEngineIndex,
         index=index,
         deployed_index_id=DEPLOYED_INDEX_ID,
         # Set machine type and replicas based on expected load/budget
-        machine_type='e2-standard-16',
+        machine_type='e2-standard-2',
         min_replica_count=1,
         max_replica_count=2,
     )
