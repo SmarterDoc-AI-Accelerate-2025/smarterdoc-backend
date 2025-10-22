@@ -1,7 +1,3 @@
-# deploy_vector_index.py
-
-import time
-import os
 from google.cloud import aiplatform
 from app.config import settings
 
