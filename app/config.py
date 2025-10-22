@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Vector Search
     VECTOR_SEARCH_ENDPOINT_NAME: str | None = None
-    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'doctor_embedding_deployed'
+    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'doc_embedding_deployed'
 
     # ============================================
     # AI Chat & Gen AI Configuration
@@ -74,10 +74,10 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_NUMBER: str | None = None
-    
+
     # Appointment phone number for booking calls
     APPOINTMENT_PHONE_NUMBER: str | None = None
-    
+
     # ngrok URL for local development (override for WebSocket connections)
     NGROK_URL: str | None = None
 
