@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from app.services.vertex_vector_search_service import VertexVectorSearchService  # Stage 1
 from app.services.gemini_client import GeminiClient  # LLM & Tool Orchestration
 from app.services.ranker import generate_ranking_weights, apply_personalized_reranking  # Stage 3 Tool
-from app.models.schemas import FinalRecommendedDoctor, FinalRecommendationList
+from app.models.schemas import FinalRecommendedDoctor, FinalRecommendationList, Top3SelectionResult
 from app.util.hospitals import HOSPITAL_TIERS
 from app.util.med_schools import MED_SCHOOL_TIERS
 from app.util.logging import logger
@@ -103,31 +103,61 @@ class RagAgentService:
             User's Original Query: {user_query}
             
             FORMAT REQUIREMENT:
-             Return the final JSON list of the Top 3 doctors profiles, ensuring each object contains 
-            a new field: 'agent_reasoning_summary' with your justification.
+             Return ONLY the Top 3 NPIs with their reasoning. Each object should contain:
+             - npi: the doctor's NPI
+             - agent_reasoning_summary: your justification for why this doctor was selected
             """
-        justified_top_3_json_str = self.gemini_client.generate_structured_data(
-            prompt=justification_prompt, schema=FinalRecommendationList)
+        top_3_selection_json_str = self.gemini_client.generate_structured_data(
+            prompt=justification_prompt, schema=Top3SelectionResult)
 
         # Parse the JSON string into Python objects
         try:
-            result = FinalRecommendationList.model_validate_json(
-                justified_top_3_json_str)
-            justified_top_3_doctors = [
-                doc.model_dump() for doc in result.recommendations
+            result = Top3SelectionResult.model_validate_json(
+                top_3_selection_json_str)
+            top_3_selections = [
+                selection.model_dump() for selection in result.top_3_selections
             ]
             logger.info(
-                f"=====DEBUG CHECK: Top 3 doctors list (should include extra fields): {justified_top_3_doctors}"
+                f"=====DEBUG CHECK: Top 3 NPI selections: {top_3_selections}"
             )
         except Exception as e:
-            logger.error(f"Failed to parse Top 3 JSON: {e}")
-            justified_top_3_doctors = []
+            logger.error(f"Failed to parse Top 3 selection JSON: {e}")
+            top_3_selections = []
 
-        top_3_npis = set(j.get('npi') for j in justified_top_3_doctors)
+        # Extract NPIs and reasoning from top 3 selections
+        top_3_npis = [selection.get('npi') for selection in top_3_selections]
+        top_3_reasoning = {selection.get('npi'): selection.get('agent_reasoning_summary', '') 
+                          for selection in top_3_selections}
+        
+        logger.info(f"===== Top 3 NPIs: {top_3_npis}")
+        logger.info(f"===== Top 3 reasoning: {top_3_reasoning}")
+
+        # Filter out top 3 from the rest of candidates
+        top_3_npis_set = set(top_3_npis)
         rest_27_filtered = list(
-            filter(lambda x: x.get('npi') not in top_3_npis,
+            filter(lambda x: x.get('npi') not in top_3_npis_set,
                    scored_candidates))
+        
         logger.info(
-            f"===== CHECK REST 27 FILTERED FIELDS, {list(rest_27_filtered[0].keys())}"
+            f"===== CHECK REST 27 FILTERED FIELDS, {list(rest_27_filtered[0].keys()) if rest_27_filtered else 'No rest candidates'}"
         )
-        return justified_top_3_doctors + rest_27_filtered
+        
+        # Extract top 3 doctors from scored_candidates and add reasoning
+        top_3_full_data = []
+        if top_3_npis:
+            # Find the top 3 doctors in scored_candidates by NPI
+            for candidate in scored_candidates:
+                if candidate.get('npi') in top_3_npis:
+                    # Create a copy and add reasoning
+                    doctor_with_reasoning = candidate.copy()
+                    npi = doctor_with_reasoning.get('npi')
+                    if npi in top_3_reasoning:
+                        doctor_with_reasoning['agent_reasoning_summary'] = top_3_reasoning[npi]
+                    top_3_full_data.append(doctor_with_reasoning)
+
+        # Combine top 3 with reasoning and rest candidates
+        final_result = top_3_full_data + rest_27_filtered
+        
+        logger.info(f"===== Final result: {len(final_result)} doctors (top 3 with reasoning + rest 27)")
+        
+        return final_result
