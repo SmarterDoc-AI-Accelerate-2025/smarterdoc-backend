@@ -6,6 +6,21 @@ Backend Link: https://smarterdoc-backend-1094971678787.us-central1.run.app
 
 Test End Point: https://smarterdoc-backend-1094971678787.us-central1.run.app
 
+---
+
+## Overview
+
+The SmarterDoc backend is the core service responsible for data retrieval, reasoning, and integration with AI models.  
+It handles structured healthcare data pipelines, query interpretation, and ranking logic through FastAPI and Vertex AI, and provides REST APIs consumed by the frontend.
+
+### Backend System Flow
+
+The diagram below illustrates how the backend processes user requests, connects to Vertex AI, and returns structured results.
+
+![Backend System Flow](./backend_flow.png)
+
+---
+
 ## Getting Started
 
 You can run this application either locally using a Python virtual environment or, preferably, using Docker Compose for a quick, isolated setup that includes the necessary dependencies.
