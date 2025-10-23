@@ -49,7 +49,7 @@ class RagAgentService:
         # Call the new search_dense method on your VertexVectorSearchService
         candidates_30 = await self.vector_search_service.search_dense(
             dense_vector=dense_query_vector,
-            k=30,
+            k=20,
             metadata_filters=metadata_filters)
 
         if dense_query_vector is None:
