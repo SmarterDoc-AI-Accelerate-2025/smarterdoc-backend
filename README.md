@@ -2,9 +2,9 @@
 
 ## GCP Link
 
-Backend Link: https://smarterdoc-backend.us-central1.run.app
+Backend Link: https://smarterdoc-backend-1094971678787.us-central1.run.app
 
-Test End Point: https://smarterdoc-backend.us-central1.run.app/hello
+Test End Point: https://smarterdoc-backend-1094971678787.us-central1.run.app
 
 ## Getting Started
 
