@@ -31,13 +31,18 @@ from app.util.logging import logger
 class AllDoctorsGeocoder:
     def __init__(self):
         self.client = get_bq_sync()
-        self.project_id = settings.GCP_PROJECT_ID or os.getenv("GOOGLE_CLOUD_PROJECT")
-        self.api_key = settings.MAPS_API_KEY or os.getenv("MAPS_API_KEY")
+        
+        # Try to get project ID from settings, then from client, then from environment
+        self.project_id = (settings.GCP_PROJECT_ID or 
+                          getattr(self.client, 'project', None) or 
+                          os.getenv('GOOGLE_CLOUD_PROJECT'))
+        
+        self.api_key = settings.MAPS_API_KEY
         
         if not self.project_id:
-            raise ValueError("GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT must be set")
+            raise ValueError("GCP_PROJECT_ID must be set in config.py or GOOGLE_CLOUD_PROJECT environment variable")
         if not self.api_key:
-            raise ValueError("MAPS_API_KEY must be set")
+            raise ValueError("MAPS_API_KEY must be set in config.py")
         
         # Rate limiting
         self.qps = float(os.getenv("QPS", "6"))  # Queries per second
@@ -232,13 +237,14 @@ class AllDoctorsGeocoder:
         logger.warning(f"Failed to geocode any address for NPI {doctor['npi']}")
         return None
 
-    def update_doctor_coordinates(self, npi: str, latitude: float, longitude: float) -> bool:
-        """Update doctor coordinates in the curated table."""
+    def update_doctor_coordinates(self, npi: str, latitude: float, longitude: float, address_used: str = None) -> bool:
+        """Update doctor coordinates and address in the curated table."""
         query = f"""
         UPDATE `{self.project_id}.curated.doctor_profiles`
         SET 
             latitude = @latitude,
             longitude = @longitude,
+            address = @address,
             updated_at = CURRENT_TIMESTAMP()
         WHERE CAST(npi AS STRING) = @npi
         """
@@ -247,6 +253,7 @@ class AllDoctorsGeocoder:
             query_parameters=[
                 ScalarQueryParameter("latitude", "FLOAT64", latitude),
                 ScalarQueryParameter("longitude", "FLOAT64", longitude),
+                ScalarQueryParameter("address", "STRING", address_used or ""),
                 ScalarQueryParameter("npi", "STRING", str(npi))
             ]
         )
@@ -254,10 +261,10 @@ class AllDoctorsGeocoder:
         try:
             job = self.client.query(query, job_config=job_config)
             job.result()  # Wait for completion
-            logger.info(f"Updated coordinates for NPI {npi}: ({latitude}, {longitude})")
+            logger.info(f"Updated coordinates and address for NPI {npi}: ({latitude}, {longitude}) - {address_used}")
             return True
         except Exception as e:
-            logger.error(f"Failed to update coordinates for NPI {npi}: {e}")
+            logger.error(f"Failed to update coordinates and address for NPI {npi}: {e}")
             return False
 
     def process_batch(self, doctors: List[Dict]) -> Dict[str, int]:
@@ -287,7 +294,7 @@ class AllDoctorsGeocoder:
                         stats['non_ny_addresses'] += 1
                     
                     success = self.update_doctor_coordinates(
-                        doctor['npi'], latitude, longitude
+                        doctor['npi'], latitude, longitude, address_used
                     )
                     
                     if success:
