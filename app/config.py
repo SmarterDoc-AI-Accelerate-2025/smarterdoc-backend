@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Vector Search
     VECTOR_SEARCH_ENDPOINT_NAME: str | None = None
-    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'doc_embedding_deployed'
+    VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = 'doc_all_embedding_deployed'
 
     # ============================================
     # AI Chat & Gen AI Configuration

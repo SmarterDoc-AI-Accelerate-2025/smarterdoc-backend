@@ -153,6 +153,8 @@ class BQDoctorService:
                 WHERE
                     profile_picture_url IS NOT NULL
                     AND TRIM(profile_picture_url) != ''
+                    -- START OF CRITICAL CHANGE: Filter by recently updated records
+                    AND updated_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 HOUR)
             )
             SELECT
                 npi,
@@ -169,6 +171,9 @@ class BQDoctorService:
                 DedupedDoctors
             WHERE
                 rn = 1
+                -- OPTIONAL: Add a secondary filter here if you want to be extra safe 
+                -- and exclude any rows that were already re-indexed recently.
+                -- For now, the TIMESTAMP_SUB filter in the CTE is sufficient.
         """
         logger.info(f"Executing BQ fetch query: {query}")
 
